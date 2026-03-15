@@ -261,6 +261,23 @@
             <button class="btn btn-demo" id="btn-demo" onclick="startDemo()" style="flex:1;">ROUNDTRIP 100m</button>
         </div>
         <div class="demo-status" id="demo-status">Ready</div>
+
+        <div class="section-title">Keyboard Fly</div>
+        <div style="font-size:0.55em; color:#8a9bb0; font-family:monospace; line-height:1.6; margin-top:2px;">
+            <span id="k-w" style="padding:1px 4px; border:1px solid #2a3f55; border-radius:2px;">W</span> Fwd
+            <span id="k-s" style="padding:1px 4px; border:1px solid #2a3f55; border-radius:2px;">S</span> Back
+            <span id="k-a" style="padding:1px 4px; border:1px solid #2a3f55; border-radius:2px;">A</span> Left
+            <span id="k-d" style="padding:1px 4px; border:1px solid #2a3f55; border-radius:2px;">D</span> Right<br>
+            <span id="k-r" style="padding:1px 4px; border:1px solid #2a3f55; border-radius:2px;">R</span> Up
+            <span id="k-f" style="padding:1px 4px; border:1px solid #2a3f55; border-radius:2px;">F</span> Down
+            <span id="k-q" style="padding:1px 4px; border:1px solid #2a3f55; border-radius:2px;">Q</span> Yaw L
+            <span id="k-e" style="padding:1px 4px; border:1px solid #2a3f55; border-radius:2px;">E</span> Yaw R<br>
+            <span id="k-up" style="padding:1px 4px; border:1px solid #2a3f55; border-radius:2px;">&uarr;</span>
+            <span id="k-down" style="padding:1px 4px; border:1px solid #2a3f55; border-radius:2px;">&darr;</span>
+            <span id="k-left" style="padding:1px 4px; border:1px solid #2a3f55; border-radius:2px;">&larr;</span>
+            <span id="k-right" style="padding:1px 4px; border:1px solid #2a3f55; border-radius:2px;">&rarr;</span> = Arrows work too
+        </div>
+        <div style="font-size:0.5em; color:#556677; margin-top:2px;">Speed: <span id="fly-speed">3</span> m/s | Must be in GUIDED mode &amp; armed</div>
     </div>
 
     <!-- Bottom strip -->
@@ -571,6 +588,75 @@ function updateMap(data) {
     const c=trailPolyline.getLatLngs();
     if(c.length>CONFIG.visualization.trail_length) trailPolyline.setLatLngs(c.slice(-CONFIG.visualization.trail_length));
 }
+
+// ── Keyboard Flight Controls ───────────────────────────────
+const FLY_SPEED = 3;  // m/s
+const YAW_RATE = 0.5; // rad/s
+const keysDown = {};
+let flyInterval = null;
+
+const KEY_MAP = {
+    'w': {vx: 1}, 's': {vx: -1},
+    'a': {vy: -1}, 'd': {vy: 1},
+    'r': {vz: -1}, 'f': {vz: 1},  // NED: -vz = up
+    'q': {yaw_rate: -1}, 'e': {yaw_rate: 1},
+    'arrowup': {vx: 1}, 'arrowdown': {vx: -1},
+    'arrowleft': {vy: -1}, 'arrowright': {vy: 1},
+};
+
+const KEY_EL_MAP = {
+    'w':'k-w','s':'k-s','a':'k-a','d':'k-d',
+    'r':'k-r','f':'k-f','q':'k-q','e':'k-e',
+    'arrowup':'k-up','arrowdown':'k-down','arrowleft':'k-left','arrowright':'k-right',
+};
+
+function sendFlyCmd() {
+    let vx=0, vy=0, vz=0, yr=0;
+    for (const [key, active] of Object.entries(keysDown)) {
+        if (!active) continue;
+        const m = KEY_MAP[key];
+        if (m) {
+            if (m.vx) vx += m.vx;
+            if (m.vy) vy += m.vy;
+            if (m.vz) vz += m.vz;
+            if (m.yaw_rate) yr += m.yaw_rate;
+        }
+    }
+    socket.emit('fly', {
+        vx: vx * FLY_SPEED,
+        vy: vy * FLY_SPEED,
+        vz: vz * FLY_SPEED,
+        yaw_rate: yr * YAW_RATE,
+    });
+}
+
+document.addEventListener('keydown', (e) => {
+    const key = e.key.toLowerCase();
+    if (KEY_MAP[key] && !keysDown[key]) {
+        e.preventDefault();
+        keysDown[key] = true;
+        const el = document.getElementById(KEY_EL_MAP[key]);
+        if (el) { el.style.background = '#5cb8ff'; el.style.color = '#0f1923'; }
+        if (!flyInterval) flyInterval = setInterval(sendFlyCmd, 100); // 10Hz
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    const key = e.key.toLowerCase();
+    if (KEY_MAP[key]) {
+        e.preventDefault();
+        keysDown[key] = false;
+        const el = document.getElementById(KEY_EL_MAP[key]);
+        if (el) { el.style.background = ''; el.style.color = ''; }
+        // Stop sending if no keys pressed
+        if (!Object.values(keysDown).some(v => v)) {
+            clearInterval(flyInterval);
+            flyInterval = null;
+            // Send zero velocity to stop
+            socket.emit('fly', {vx:0, vy:0, vz:0, yaw_rate:0});
+        }
+    }
+});
 
 // ── Init ───────────────────────────────────────────────────
 try { init3D(); } catch(e) { clog('SYS', '3D init error: '+e.message, 'log-err'); }

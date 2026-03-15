@@ -131,6 +131,16 @@ def handle_command(data):
     emit("command_result", result)
 
 
+@socketio.on("fly")
+def handle_fly(data):
+    """Handle keyboard flight velocity commands."""
+    vx = data.get("vx", 0)  # forward/back
+    vy = data.get("vy", 0)  # left/right
+    vz = data.get("vz", 0)  # up/down (NED: negative = up)
+    yr = data.get("yaw_rate", 0)
+    bridge.send_velocity(vx, vy, vz, yr)
+
+
 @socketio.on("camera_frame")
 def handle_camera_frame(data):
     """Forward camera frame from bridge to all browser clients."""
