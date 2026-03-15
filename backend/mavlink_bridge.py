@@ -350,7 +350,16 @@ class MAVLinkBridge:
         return False
 
     def demo_roundtrip(self, status_callback=None):
-        """Demo flight: 100m out at 50m, land, wait 25s, fly back at 75m.
+        """Demo flight: surveillance route over vehicles, then return.
+
+        Route (at 25m altitude for good camera view):
+          1. Takeoff to 25m
+          2. Fly to E-W road (20m north) — see parked cars
+          3. Fly east along the road to intersection (30m east)
+          4. Fly south along N-S road — see more vehicles
+          5. Land at waypoint, wait 25s
+          6. Takeoff to 35m, fly back home
+          7. Land
 
         Runs in a background thread. status_callback(msg) is called with progress.
         """
@@ -361,13 +370,29 @@ class MAVLinkBridge:
 
         home_lat = self.position["lat"]
         home_lon = self.position["lon"]
+        cos_lat = math.cos(math.radians(home_lat))
 
-        # Target: 100m north
-        target_lat = home_lat + (100.0 / 110540.0)
-        target_lon = home_lon
+        # Waypoints matching Gazebo vehicle positions
+        # WP1: E-W road west end (cars at x=-15 to x=40, y=17-23)
+        wp1_lat = home_lat + (20.0 / 110540.0)
+        wp1_lon = home_lon + (-20.0 / (111320.0 * cos_lat))
+
+        # WP2: E-W road east end / intersection
+        wp2_lat = home_lat + (20.0 / 110540.0)
+        wp2_lon = home_lon + (40.0 / (111320.0 * cos_lat))
+
+        # WP3: N-S road south (cars along x=27-33)
+        wp3_lat = home_lat + (-30.0 / 110540.0)
+        wp3_lon = home_lon + (30.0 / (111320.0 * cos_lat))
+
+        # WP4: Parking lot (x=-40, y=-20)
+        wp4_lat = home_lat + (-22.0 / 110540.0)
+        wp4_lon = home_lon + (-40.0 / (111320.0 * cos_lat))
+
+        cruise_alt = 25  # Good altitude for seeing vehicles
 
         try:
-            # ── LEG 1: Fly 100m at 50m altitude ──
+            # ── LEG 1: Surveillance route over vehicles ──
             log("Setting GUIDED mode...")
             self.set_mode("GUIDED")
             time.sleep(1)
@@ -379,23 +404,38 @@ class MAVLinkBridge:
                 return {"success": False, "message": result["message"]}
             time.sleep(1)
 
-            log("Taking off to 50m...")
-            self.takeoff(50)
-            self.wait_altitude(50, tolerance=3, timeout=60,
+            log(f"Taking off to {cruise_alt}m...")
+            self.takeoff(cruise_alt)
+            self.wait_altitude(cruise_alt, tolerance=3, timeout=60,
                                callback=lambda alt: log(f"Climbing... {alt:.1f}m"))
 
-            log(f"Flying 100m north to ({target_lat:.6f}, {target_lon:.6f})...")
-            self.goto_position(target_lat, target_lon, 50)
-            self.wait_position(target_lat, target_lon, tolerance=3, timeout=60,
-                               callback=lambda d, a: log(f"En route... {d:.0f}m remaining, alt={a:.1f}m"))
+            log("WP1: Flying to E-W road (west end, cars below)...")
+            self.goto_position(wp1_lat, wp1_lon, cruise_alt)
+            self.wait_position(wp1_lat, wp1_lon, tolerance=3, timeout=60,
+                               callback=lambda d, a: log(f"En route WP1... {d:.0f}m remaining"))
 
-            log("Reached waypoint. Landing...")
+            log("WP2: Flying east along the road (over parked cars)...")
+            self.goto_position(wp2_lat, wp2_lon, cruise_alt)
+            self.wait_position(wp2_lat, wp2_lon, tolerance=3, timeout=60,
+                               callback=lambda d, a: log(f"En route WP2... {d:.0f}m remaining"))
+
+            log("WP3: Flying south along N-S road (more vehicles)...")
+            self.goto_position(wp3_lat, wp3_lon, cruise_alt)
+            self.wait_position(wp3_lat, wp3_lon, tolerance=3, timeout=60,
+                               callback=lambda d, a: log(f"En route WP3... {d:.0f}m remaining"))
+
+            log("WP4: Flying to parking lot...")
+            self.goto_position(wp4_lat, wp4_lon, cruise_alt)
+            self.wait_position(wp4_lat, wp4_lon, tolerance=3, timeout=60,
+                               callback=lambda d, a: log(f"En route WP4... {d:.0f}m remaining"))
+
+            log("Reached parking lot. Landing...")
             self.set_mode("LAND")
             self.wait_disarmed(timeout=120)
             log("Landed. Waiting 25 seconds...")
             time.sleep(25)
 
-            # ── LEG 2: Fly back at 75m altitude ──
+            # ── LEG 2: Fly back home at higher altitude ──
             log("Setting GUIDED mode for return...")
             self.set_mode("GUIDED")
             time.sleep(1)
@@ -407,15 +447,15 @@ class MAVLinkBridge:
                 return {"success": False, "message": result["message"]}
             time.sleep(1)
 
-            log("Taking off to 75m...")
-            self.takeoff(75)
-            self.wait_altitude(75, tolerance=3, timeout=90,
+            log("Taking off to 35m for return...")
+            self.takeoff(35)
+            self.wait_altitude(35, tolerance=3, timeout=60,
                                callback=lambda alt: log(f"Climbing... {alt:.1f}m"))
 
             log(f"Flying back to home ({home_lat:.6f}, {home_lon:.6f})...")
-            self.goto_position(home_lat, home_lon, 75)
+            self.goto_position(home_lat, home_lon, 35)
             self.wait_position(home_lat, home_lon, tolerance=3, timeout=60,
-                               callback=lambda d, a: log(f"Returning... {d:.0f}m remaining, alt={a:.1f}m"))
+                               callback=lambda d, a: log(f"Returning... {d:.0f}m remaining"))
 
             log("Back at home. Landing...")
             self.set_mode("LAND")
