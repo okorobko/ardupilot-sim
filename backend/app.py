@@ -131,6 +131,12 @@ def handle_command(data):
     emit("command_result", result)
 
 
+@socketio.on("camera_frame")
+def handle_camera_frame(data):
+    """Forward camera frame from bridge to all browser clients."""
+    socketio.emit("camera_frame", data)
+
+
 @socketio.on("demo_roundtrip")
 def handle_demo_roundtrip(data=None):
     global _demo_thread

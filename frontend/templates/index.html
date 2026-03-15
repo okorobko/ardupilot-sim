@@ -52,6 +52,31 @@
         .hud-overlay div { margin: 1px 0; }
         .hud-val { color: #5cb8ff; }
 
+        /* Camera feed overlay */
+        .camera-overlay {
+            position: absolute; top: 8px; right: 8px;
+            border: 2px solid #5cb8ff; border-radius: 6px;
+            overflow: hidden; background: #000;
+            cursor: pointer; z-index: 10;
+        }
+        .camera-overlay img {
+            display: block; width: 280px; height: 210px;
+            object-fit: cover;
+        }
+        .camera-overlay.expanded img {
+            width: 560px; height: 420px;
+        }
+        .camera-label {
+            position: absolute; bottom: 4px; left: 6px;
+            font-size: 0.6em; color: #5cb8ff; font-family: monospace;
+            background: rgba(0,0,0,0.6); padding: 1px 5px; border-radius: 3px;
+        }
+        .camera-no-signal {
+            width: 280px; height: 210px; display: flex;
+            align-items: center; justify-content: center;
+            color: #556677; font-size: 0.75em; font-family: monospace;
+        }
+
         /* Commands panel (top-right) */
         .panel-cmds {
             grid-area: cmds; border-bottom: 1px solid #2a3f55;
@@ -190,6 +215,11 @@
             <div>ALT: <span class="hud-val" id="hud-alt">0.0</span> m</div>
             <div>SPD: <span class="hud-val" id="hud-spd">0.0</span> m/s</div>
             <div>HDG: <span class="hud-val" id="hud-hdg">0</span>&deg;</div>
+        </div>
+        <div class="camera-overlay" id="camera-overlay" onclick="toggleCamera()">
+            <div class="camera-no-signal" id="camera-no-signal">CAMERA: NO SIGNAL</div>
+            <img id="camera-img" style="display:none;" alt="Camera">
+            <div class="camera-label" id="camera-label">CAM</div>
         </div>
     </div>
 
@@ -330,6 +360,23 @@ socket.on('demo_status', (data) => {
         btn.disabled = false; btn.style.opacity = '1'; btn.textContent = 'ROUNDTRIP 100m';
     }
 });
+
+// ── Camera feed ────────────────────────────────────────────
+let cameraFrames = 0;
+socket.on('camera_frame', (data) => {
+    const img = document.getElementById('camera-img');
+    const noSig = document.getElementById('camera-no-signal');
+    img.src = 'data:image/jpeg;base64,' + data.data;
+    img.style.display = 'block';
+    noSig.style.display = 'none';
+    cameraFrames++;
+    document.getElementById('camera-label').textContent = `CAM ${cameraFrames}`;
+    if (cameraFrames === 1) clog('SYS', 'Camera feed connected', 'log-ok');
+});
+
+function toggleCamera() {
+    document.getElementById('camera-overlay').classList.toggle('expanded');
+}
 
 socket.on('log', (data) => {
     const tag = data.tag || 'SYS';
