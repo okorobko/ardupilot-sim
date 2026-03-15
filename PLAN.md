@@ -166,3 +166,38 @@ requirements.txt: flask, flask-socketio, pymavlink, pyyaml
 - [x] Step 7: SITL launch script
 - [x] Step 8: Combined startup script
 - [x] Step 9: Python venv + requirements
+
+## Phase 2: Gazebo Integration (ML-ready simulation)
+
+### Goal
+Add Gazebo Harmonic simulation world with vehicles (cars, trucks, SUVs) that YOLO can detect via a downward-facing drone camera.
+
+### Architecture
+```
+Gazebo Harmonic (3D world + vehicles + camera sensor)
+    │ ArduPilotPlugin (UDP servo/FDM)
+    ▼
+ArduPilot SITL (gazebo-iris frame)
+    │ TCP:5760
+    ▼
+Flask Backend (pymavlink)
+    │ WebSocket
+    ▼
+Web Dashboard + Camera Feed
+
+Gazebo camera → ros_gz_bridge → /camera/image_raw → YOLO → /yolo/detections → Dashboard
+```
+
+### Progress
+- [x] Clone ardupilot_gazebo
+- [x] Create iris_with_camera model (downward camera)
+- [x] Create drone_surveillance world (roads + 15 vehicles from Fuel)
+- [x] Create Gazebo launch/bridge scripts
+- [ ] Install Gazebo Harmonic (conda ros-humble-ros-gz)
+- [ ] Build ardupilot_gazebo plugin
+- [ ] Test Gazebo world renders
+- [ ] Test SITL ↔ Gazebo connection
+- [ ] Test camera → ROS2 bridge
+- [ ] Add camera feed to web dashboard
+- [ ] Connect YOLO detector
+- [ ] End-to-end test: fly over vehicles, detect with YOLO
