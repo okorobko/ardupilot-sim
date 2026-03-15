@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Launch full Gazebo simulation stack
-# Order: Gazebo → SITL → ROS2 Bridge → YOLO → Backend
+# Order: Gazebo server → unpause → SITL → Backend → GUI
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -24,46 +24,51 @@ trap cleanup SIGINT SIGTERM EXIT
 export GZ_SIM_SYSTEM_PLUGIN_PATH="${ARDU_GZ_DIR}/build:${GZ_SIM_SYSTEM_PLUGIN_PATH:-}"
 export GZ_SIM_RESOURCE_PATH="${ARDU_GZ_DIR}/models:${ARDU_GZ_DIR}/worlds:${PROJECT_DIR}/gazebo/models:${PROJECT_DIR}/gazebo/worlds:${GZ_SIM_RESOURCE_PATH:-}"
 
-# Activate venv for backend
 VENV="${PROJECT_DIR}/venv"
 
 echo "=== ArduPilot + Gazebo Simulation Stack ==="
 echo ""
 
-# 1. Start Gazebo
-echo "[1/4] Starting Gazebo..."
-gz sim "${PROJECT_DIR}/gazebo/worlds/drone_surveillance.sdf" -v 2 &
+# 1. Start Gazebo server (macOS requires -s for server-only)
+echo "[1/5] Starting Gazebo server..."
+gz sim -s "${PROJECT_DIR}/gazebo/worlds/drone_surveillance.sdf" -v 2 &
 PIDS+=($!)
 sleep 10
 
-# 2. Start SITL (gazebo-iris)
-echo "[2/4] Starting ArduPilot SITL (gazebo-iris)..."
+# 2. Unpause simulation
+echo "[2/5] Unpausing simulation..."
+gz service -s /world/drone_surveillance/control \
+    --reqtype gz.msgs.WorldControl \
+    --reptype gz.msgs.Boolean \
+    --timeout 5000 --req 'pause: false'
+sleep 2
+
+# 3. Start SITL with JSON model (matches ArduPilotPlugin protocol)
+echo "[3/5] Starting ArduPilot SITL (JSON model)..."
 bash "$SCRIPT_DIR/start_gazebo_sitl.sh" &
 PIDS+=($!)
 sleep 15
 
-# 3. Start ROS2 bridge
-echo "[3/4] Starting ROS2 camera bridge..."
-bash "$SCRIPT_DIR/start_gz_bridge.sh" &
-PIDS+=($!)
-sleep 3
-
 # 4. Start Flask backend
-echo "[4/4] Starting web dashboard..."
+echo "[4/5] Starting web dashboard..."
 if [ -d "$VENV" ]; then
     source "$VENV/bin/activate"
 fi
 cd "$PROJECT_DIR/backend"
 python3 app.py &
 PIDS+=($!)
-
 sleep 2
+
+# 5. Launch Gazebo GUI (macOS requires separate process)
+echo "[5/5] Launching Gazebo GUI..."
+gz sim -g &
+PIDS+=($!)
 
 echo ""
 echo "=========================================="
-echo "  Gazebo:    Running (check GUI)"
-echo "  SITL:      ArduCopter (gazebo-iris)"
-echo "  Camera:    /camera → /camera/image_raw"
+echo "  Gazebo:    Running (server + GUI)"
+echo "  SITL:      ArduCopter (JSON model)"
+echo "  Camera:    /camera (Gazebo transport)"
 echo "  Dashboard: http://localhost:5001"
 echo ""
 echo "  Press Ctrl+C to stop all"

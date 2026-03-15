@@ -35,7 +35,7 @@ echo ""
 exec "$SIM_VEHICLE" \
     -v ArduCopter \
     --frame gazebo-iris \
-    --model gazebo-iris \
+    --model JSON \
     -l "$HOME_LOC" \
     --no-rebuild \
     --no-mavproxy
