@@ -1,0 +1,22 @@
+vehicle:
+  type: copter        # copter | plane | rover | sub
+  frame: quad         # quad | hexa | octa | tri | y6
+
+simulation:
+  ardupilot_dir: ~/ardupilot
+  home_lat: 50.450001
+  home_lon: 30.523333
+  home_alt: 180
+  home_heading: 0
+  speed_up: 1
+  mavlink_port: 5760
+
+visualization:
+  ground_size: 500
+  camera_follow: true
+  camera_distance: 20
+  show_trail: true
+  trail_length: 200
+  drone_model:
+    body_color: "#333333"
+    prop_color: "#22aa44"

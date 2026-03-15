@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArduPilot Drone Simulator</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.149.0/examples/js/controls/OrbitControls.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0f1923; color: #e0e6ed; overflow: hidden; height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1a2332 0%, #1e3a5f 100%);
+            padding: 6px 20px; display: flex; align-items: center;
+            justify-content: space-between; border-bottom: 1px solid #2a3f55; height: 38px;
+        }
+        .header h1 { font-size: 1em; font-weight: 600; color: #5cb8ff; }
+        .header-right { display: flex; align-items: center; gap: 12px; font-size: 0.78em; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+        .dot-ok { background: #5cdb5c; } .dot-off { background: #8a9bb0; }
+        .dot-armed { background: #ffc107; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        /* ── Main: top row (3D + controls) + bottom row (console + telem + map) ── */
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            grid-template-rows: 1fr 260px;
+            grid-template-areas: "scene cmds" "bottom bottom";
+            height: calc(100vh - 38px);
+        }
+
+        /* 3D scene */
+        .panel-3d {
+            grid-area: scene; position: relative;
+            border-right: 1px solid #2a3f55; border-bottom: 1px solid #2a3f55; overflow: hidden;
+        }
+        #three-canvas { width: 100%; height: 100%; display: block; }
+        .hud-overlay {
+            position: absolute; top: 8px; left: 8px;
+            background: rgba(15,25,35,0.85); border: 1px solid #2a3f55;
+            border-radius: 6px; padding: 6px 10px; font-size: 0.72em;
+            font-family: monospace; pointer-events: none;
+        }
+        .hud-overlay div { margin: 1px 0; }
+        .hud-val { color: #5cb8ff; }
+
+        /* Commands panel (top-right) */
+        .panel-cmds {
+            grid-area: cmds; border-bottom: 1px solid #2a3f55;
+            padding: 6px 10px; overflow-y: auto;
+        }
+        .section-title {
+            font-size: 0.62em; font-weight: 600; text-transform: uppercase;
+            color: #5cb8ff; letter-spacing: 0.5px; margin: 5px 0 2px;
+            padding-bottom: 2px; border-bottom: 1px solid #2a3f55;
+        }
+        .section-title:first-child { margin-top: 0; }
+        .controls-row { display: flex; gap: 4px; align-items: center; margin-top: 3px; }
+        .btn {
+            padding: 5px 8px; border: 1px solid #2a3f55; border-radius: 4px;
+            background: #1a2332; color: #e0e6ed; font-size: 0.7em;
+            font-weight: 600; cursor: pointer; text-align: center;
+        }
+        .btn:hover { background: #243447; }
+        .btn-arm { border-color: #ffc107; color: #ffc107; }
+        .btn-arm:hover { background: rgba(255,193,7,0.15); }
+        .btn-disarm { border-color: #8a9bb0; color: #8a9bb0; }
+        .btn-takeoff { border-color: #5cdb5c; color: #5cdb5c; }
+        .btn-takeoff:hover { background: rgba(92,219,92,0.15); }
+        .btn-land { border-color: #ff6b6b; color: #ff6b6b; }
+        .btn-land:hover { background: rgba(255,107,107,0.15); }
+        .btn-rtl { border-color: #ff9f43; color: #ff9f43; }
+        .btn-rtl:hover { background: rgba(255,159,67,0.15); }
+        .btn-demo { border-color: #a55eea; color: #a55eea; }
+        .btn-demo:hover { background: rgba(165,94,234,0.15); }
+        .mode-select {
+            background: #1a2332; border: 1px solid #2a3f55; border-radius: 4px;
+            color: #e0e6ed; padding: 4px 6px; font-size: 0.7em; flex: 1;
+        }
+        .alt-input {
+            background: #1a2332; border: 1px solid #2a3f55; border-radius: 4px;
+            color: #e0e6ed; padding: 4px 6px; font-size: 0.72em; width: 50px; text-align: center;
+        }
+        .demo-status {
+            font-size: 0.6em; color: #8a9bb0; margin-top: 2px;
+            padding: 2px 6px; background: #0a1018; border-radius: 3px; min-height: 14px;
+            font-family: monospace;
+        }
+
+        /* ── Bottom strip: console | telemetry+attitude | map ── */
+        .panel-bottom {
+            grid-area: bottom; display: flex; flex-direction: row; overflow: hidden;
+            height: 260px;
+        }
+
+        /* Console */
+        .bottom-console {
+            width: 40%; display: flex; flex-direction: column;
+            border-right: 1px solid #2a3f55; min-width: 200px;
+        }
+        .console-header {
+            background: rgba(92,184,255,0.08); padding: 2px 8px;
+            font-size: 0.62em; font-weight: 600; text-transform: uppercase;
+            color: #5cb8ff; display: flex; justify-content: space-between;
+            align-items: center; flex-shrink: 0;
+        }
+        .console-clear {
+            background: none; border: 1px solid #2a3f55; color: #8a9bb0;
+            font-size: 0.85em; padding: 0 5px; border-radius: 3px; cursor: pointer;
+        }
+        .console-clear:hover { color: #e0e6ed; }
+        #console-log {
+            flex: 1; overflow-y: auto; padding: 3px 6px;
+            font-family: 'SF Mono','Fira Code','Consolas',monospace;
+            font-size: 0.65em; line-height: 1.4; background: #0a1018;
+        }
+        .log-line { margin: 0; white-space: pre-wrap; word-break: break-all; }
+        .log-ctrl { color: #ffc107; } .log-drone { color: #5cb8ff; }
+        .log-ok { color: #5cdb5c; } .log-err { color: #ff6b6b; }
+        .log-telem { color: #556677; } .log-demo { color: #a55eea; }
+        .log-time { color: #3a4a5a; }
+        .log-tag-ctrl { color: #ffc107; font-weight: 600; }
+        .log-tag-drone { color: #5cb8ff; font-weight: 600; }
+        .log-tag-demo { color: #a55eea; font-weight: 600; }
+        .log-tag-sys { color: #8a9bb0; font-weight: 600; }
+
+        /* Telemetry + Attitude — forced horizontal with CSS grid */
+        .bottom-telem {
+            width: 260px; padding: 4px 6px;
+            border-right: 1px solid #2a3f55;
+            display: grid;
+            grid-template-columns: 1fr 1fr 80px;
+            grid-template-rows: repeat(3, 1fr);
+            gap: 2px;
+            flex-shrink: 0;
+        }
+        .telem-item {
+            background: #1a2332; border: 1px solid #2a3f55;
+            border-radius: 3px; padding: 2px 5px;
+        }
+        .telem-label { font-size: 0.5em; color: #8a9bb0; text-transform: uppercase; }
+        .telem-value { font-size: 0.78em; font-weight: 600; color: #e0e6ed; font-family: monospace; }
+        .battery-bar-outer {
+            width: 100%; height: 3px; background: #1a2332;
+            border: 1px solid #2a3f55; border-radius: 2px; margin-top: 1px; overflow: hidden;
+        }
+        .battery-bar-inner { height: 100%; background: #5cdb5c; border-radius: 1px; transition: width 0.3s, background 0.3s; }
+        .attitude-cell { grid-column: 3; grid-row: 1 / 4; display: flex; align-items: center; justify-content: center; }
+        #attitude-canvas { border-radius: 50%; border: 2px solid #2a3f55; }
+
+        /* Map */
+        .bottom-map {
+            flex: 1; min-width: 200px; position: relative;
+        }
+        #map { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+        .leaflet-container { background: #e8e8e8 !important; }
+        .map-coords {
+            position: absolute; top: 6px; left: 6px; z-index: 9999;
+            background: rgba(0,0,0,0.75); border: 1px solid #5cb8ff;
+            border-radius: 4px; padding: 4px 10px;
+            font-family: monospace; font-size: 0.72em; color: #5cb8ff;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>ArduPilot Drone Simulator</h1>
+    <div class="header-right">
+        <span><span class="status-dot dot-off" id="dot-conn"></span><span id="lbl-conn">Disconnected</span></span>
+        <span><span class="status-dot dot-off" id="dot-armed"></span><span id="lbl-armed">Disarmed</span></span>
+        <span id="lbl-mode" style="color:#ffc107; font-weight:600;">--</span>
+    </div>
+</div>
+
+<div class="main">
+    <!-- Top-left: 3D -->
+    <div class="panel-3d">
+        <canvas id="three-canvas"></canvas>
+        <div class="hud-overlay">
+            <div>ALT: <span class="hud-val" id="hud-alt">0.0</span> m</div>
+            <div>SPD: <span class="hud-val" id="hud-spd">0.0</span> m/s</div>
+            <div>HDG: <span class="hud-val" id="hud-hdg">0</span>&deg;</div>
+        </div>
+    </div>
+
+    <!-- Top-right: Commands -->
+    <div class="panel-cmds">
+        <div class="section-title">Flight Mode</div>
+        <div class="controls-row">
+            <select class="mode-select" id="mode-select">
+                <option value="STABILIZE">STABILIZE</option>
+                <option value="ALT_HOLD">ALT_HOLD</option>
+                <option value="LOITER">LOITER</option>
+                <option value="GUIDED" selected>GUIDED</option>
+                <option value="AUTO">AUTO</option>
+                <option value="RTL">RTL</option>
+                <option value="LAND">LAND</option>
+                <option value="POSHOLD">POSHOLD</option>
+            </select>
+            <button class="btn" onclick="setMode()" style="flex:none;">SET</button>
+        </div>
+
+        <div class="section-title">Commands</div>
+        <div class="controls-row">
+            <button class="btn btn-arm" onclick="sendCmd('arm')" style="flex:1;">ARM</button>
+            <button class="btn btn-disarm" onclick="sendCmd('disarm')" style="flex:1;">DISARM</button>
+        </div>
+        <div class="controls-row">
+            <button class="btn btn-takeoff" onclick="doTakeoff()" style="flex:1;">TAKEOFF</button>
+            <button class="btn btn-land" onclick="sendCmd('land')" style="flex:1;">LAND</button>
+            <button class="btn btn-rtl" onclick="sendCmd('rtl')" style="flex:1;">RTL</button>
+        </div>
+        <div class="controls-row">
+            <span style="font-size:0.6em;color:#8a9bb0;">Alt:</span>
+            <input class="alt-input" id="takeoff-alt" type="number" value="10" min="1" max="100" step="1">
+            <span style="font-size:0.6em;color:#8a9bb0;">m</span>
+        </div>
+
+        <div class="section-title">Demo</div>
+        <div class="controls-row">
+            <button class="btn btn-demo" id="btn-demo" onclick="startDemo()" style="flex:1;">ROUNDTRIP 100m</button>
+        </div>
+        <div class="demo-status" id="demo-status">Ready</div>
+    </div>
+
+    <!-- Bottom strip -->
+    <div class="panel-bottom">
+        <!-- Console -->
+        <div class="bottom-console">
+            <div class="console-header">
+                <span>Console</span>
+                <button class="console-clear" onclick="clearConsole()">Clear</button>
+            </div>
+            <div id="console-log"></div>
+        </div>
+
+        <!-- Telemetry + Attitude (grid: 2 cols items + attitude right) -->
+        <div class="bottom-telem">
+            <div class="telem-item"><div class="telem-label">Alt</div><div class="telem-value" id="t-alt">0.0m</div></div>
+            <div class="telem-item"><div class="telem-label">Climb</div><div class="telem-value" id="t-climb">0.0</div></div>
+            <div class="attitude-cell"><canvas id="attitude-canvas" width="76" height="76"></canvas></div>
+            <div class="telem-item"><div class="telem-label">Spd</div><div class="telem-value" id="t-spd">0.0</div></div>
+            <div class="telem-item"><div class="telem-label">GPS</div><div class="telem-value" id="t-sats">0</div></div>
+            <div class="telem-item"><div class="telem-label">Hdg</div><div class="telem-value" id="t-hdg">0&deg;</div></div>
+            <div class="telem-item"><div class="telem-label">Batt</div><div class="telem-value" id="t-batt">0.0V</div><div class="battery-bar-outer"><div class="battery-bar-inner" id="batt-bar" style="width:100%"></div></div></div>
+        </div>
+
+        <!-- Map -->
+        <div class="bottom-map">
+            <div id="map"></div>
+            <div class="map-coords" id="map-coords">Waiting for GPS...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── Config ─────────────────────────────────────────────────
+let CONFIG = {
+    simulation: { home_lat: 50.450001, home_lon: 30.523333, home_alt: 180 },
+    vehicle: { arm_count: 4, frame: 'quad' },
+    visualization: { ground_size: 500, camera_follow: true, camera_distance: 20, show_trail: true, trail_length: 200, drone_model: { body_color: '#333333', prop_color: '#22aa44' } }
+};
+
+// ── Console ────────────────────────────────────────────────
+const MAX_LOG = 500;
+let logCount = 0;
+
+function clog(tag, text, cls) {
+    const el = document.getElementById('console-log');
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    const ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
+    const tagCls = tag==='CONTROL' ? 'log-tag-ctrl' : tag==='DRONE' ? 'log-tag-drone' : tag==='DEMO' ? 'log-tag-demo' : 'log-tag-sys';
+    const textCls = cls || (tag==='CONTROL' ? 'log-ctrl' : tag==='DRONE' ? 'log-drone' : tag==='DEMO' ? 'log-demo' : 'log-telem');
+    line.innerHTML = `<span class="log-time">${ts}</span> <span class="${tagCls}">[${tag}]</span> <span class="${textCls}">${esc(text)}</span>`;
+    el.appendChild(line);
+    logCount++;
+    if (logCount > MAX_LOG) { el.removeChild(el.firstChild); logCount--; }
+    el.scrollTop = el.scrollHeight;
+}
+function esc(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function clearConsole() { document.getElementById('console-log').innerHTML = ''; logCount = 0; }
+
+// ── SocketIO ───────────────────────────────────────────────
+const socket = io();
+let latestTelem = {}, lastMode = '', lastArmed = null;
+
+socket.on('connect', () => clog('SYS', 'Connected to backend', 'log-ok'));
+socket.on('disconnect', () => clog('SYS', 'Disconnected', 'log-err'));
+
+socket.on('config', (cfg) => {
+    CONFIG = cfg;
+    clog('SYS', `SITL: ${cfg.vehicle.type}/${cfg.vehicle.frame} home=(${cfg.simulation.home_lat.toFixed(4)}, ${cfg.simulation.home_lon.toFixed(4)})`);
+    initMap(); buildDroneModel();
+});
+
+socket.on('telemetry', (data) => {
+    latestTelem = data;
+    updateTelemetryUI(data);
+    try { update3D(data); } catch(e) {}
+    updateMap(data);
+    if (data.flight_mode && data.flight_mode !== lastMode) {
+        clog('DRONE', `Mode: ${lastMode||'??'} -> ${data.flight_mode}`);
+        lastMode = data.flight_mode;
+    }
+    if (data.armed !== lastArmed && lastArmed !== null)
+        clog('DRONE', data.armed ? 'ARMED' : 'DISARMED', data.armed ? 'log-ctrl' : 'log-ok');
+    lastArmed = data.armed;
+});
+
+socket.on('command_result', (data) => {
+    // shown via log events
+});
+
+socket.on('demo_status', (data) => {
+    document.getElementById('demo-status').textContent = data.message;
+    clog('DEMO', data.message);
+    if (data.done) {
+        const btn = document.getElementById('btn-demo');
+        btn.disabled = false; btn.style.opacity = '1'; btn.textContent = 'ROUNDTRIP 100m';
+    }
+});
+
+socket.on('log', (data) => {
+    const tag = data.tag || 'SYS';
+    const cls = data.cls || (tag==='CONTROL'?'log-ctrl':tag==='DRONE'?'log-drone':'log-telem');
+    clog(tag, data.message, cls);
+});
+
+// ── Commands ───────────────────────────────────────────────
+function sendCmd(action) { clog('CONTROL','>> '+action.toUpperCase()); socket.emit('command',{action}); }
+function doTakeoff() { const a=parseFloat(document.getElementById('takeoff-alt').value)||10; clog('CONTROL',`>> TAKEOFF ${a}m`); socket.emit('command',{action:'takeoff',altitude:a}); }
+function setMode() { const m=document.getElementById('mode-select').value; clog('CONTROL',`>> SET_MODE ${m}`); socket.emit('command',{action:'set_mode',mode:m}); }
+function startDemo() {
+    const btn=document.getElementById('btn-demo'); btn.disabled=true; btn.style.opacity='0.5'; btn.textContent='DEMO...';
+    document.getElementById('demo-status').style.color='#a55eea';
+    clog('CONTROL','>> ROUNDTRIP DEMO'); socket.emit('demo_roundtrip');
+}
+
+// ── Telemetry UI ───────────────────────────────────────────
+function updateTelemetryUI(d) {
+    document.getElementById('dot-conn').className = 'status-dot '+(d.connected?'dot-ok':'dot-off');
+    document.getElementById('lbl-conn').textContent = d.connected?'Connected':'Disconnected';
+    document.getElementById('dot-armed').className = 'status-dot '+(d.armed?'dot-armed':'dot-off');
+    document.getElementById('lbl-armed').textContent = d.armed?'ARMED':'Disarmed';
+    document.getElementById('lbl-mode').textContent = d.flight_mode||'--';
+    const alt = d.position?d.position.alt:0;
+    document.getElementById('t-alt').textContent = alt.toFixed(1)+'m';
+    document.getElementById('t-spd').textContent = (d.groundspeed||0).toFixed(1);
+    document.getElementById('t-hdg').innerHTML = Math.round(d.heading||0)+'&deg;';
+    document.getElementById('t-climb').textContent = (d.climb_rate||0).toFixed(1);
+    document.getElementById('t-sats').textContent = d.gps?d.gps.satellites:0;
+    const bv=d.battery?d.battery.voltage:0, br=d.battery?d.battery.remaining:100;
+    document.getElementById('t-batt').textContent = bv.toFixed(1)+'V';
+    const bar=document.getElementById('batt-bar');
+    bar.style.width=br+'%'; bar.style.background=br>30?'#5cdb5c':br>15?'#ffc107':'#ff6b6b';
+    document.getElementById('hud-alt').textContent = alt.toFixed(1);
+    document.getElementById('hud-spd').textContent = (d.groundspeed||0).toFixed(1);
+    document.getElementById('hud-hdg').textContent = Math.round(d.heading||0);
+    drawAttitude(d.attitude||{roll:0,pitch:0});
+}
+
+// ── Attitude ───────────────────────────────────────────────
+function drawAttitude(att) {
+    const c=document.getElementById('attitude-canvas'), ctx=c.getContext('2d');
+    const w=c.width, h=c.height, cx=w/2, cy=h/2, r=w/2-2;
+    const roll=(att.roll||0)*Math.PI/180, pitch=att.pitch||0;
+    ctx.clearRect(0,0,w,h); ctx.save();
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
+    ctx.translate(cx,cy); ctx.rotate(-roll);
+    const pp=pitch*1.5;
+    ctx.fillStyle='#1a5276'; ctx.fillRect(-r*2,-r*2,r*4,r*2+pp);
+    ctx.fillStyle='#5d4037'; ctx.fillRect(-r*2,pp,r*4,r*2);
+    ctx.strokeStyle='#fff'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(-r*2,pp); ctx.lineTo(r*2,pp); ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle='#ffc107'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(cx-16,cy); ctx.lineTo(cx-4,cy);
+    ctx.moveTo(cx+4,cy); ctx.lineTo(cx+16,cy);
+    ctx.moveTo(cx,cy-3); ctx.lineTo(cx,cy+3); ctx.stroke();
+}
+
+// ── Three.js ───────────────────────────────────────────────
+let scene, camera, renderer, controls, droneGroup, propellers=[], trailPoints=[], trailLine;
+
+function init3D() {
+    const canvas=document.getElementById('three-canvas'), container=canvas.parentElement;
+    scene=new THREE.Scene(); scene.background=new THREE.Color(0x87ceeb);
+    scene.fog=new THREE.Fog(0x87ceeb,200,600);
+    camera=new THREE.PerspectiveCamera(60,container.clientWidth/container.clientHeight,0.1,1000);
+    camera.position.set(15,10,15);
+    renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+    renderer.setSize(container.clientWidth,container.clientHeight); renderer.shadowMap.enabled=true;
+    scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1.0));
+    const dl=new THREE.DirectionalLight(0xffffff,0.8); dl.position.set(50,100,50); dl.castShadow=true; scene.add(dl);
+    const gs=CONFIG.visualization.ground_size;
+    const gr=new THREE.Mesh(new THREE.PlaneGeometry(gs,gs,50,50),new THREE.MeshLambertMaterial({color:0x3a7d44}));
+    gr.rotation.x=-Math.PI/2; gr.receiveShadow=true; scene.add(gr);
+    const gd=new THREE.GridHelper(gs,gs/10,0x2a5e2a,0x2a5e2a); gd.position.y=0.01; scene.add(gd);
+    const hm=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,0.1,16),new THREE.MeshBasicMaterial({color:0xff4444}));
+    hm.position.y=0.05; scene.add(hm);
+    controls=new THREE.OrbitControls(camera,renderer.domElement);
+    controls.enableDamping=true; controls.dampingFactor=0.1; controls.target.set(0,2,0);
+    trailLine=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0x5cb8ff,opacity:0.7,transparent:true}));
+    scene.add(trailLine);
+    buildDroneModel(); window.addEventListener('resize',onResize); animate();
+}
+
+function buildDroneModel() {
+    if(droneGroup) scene.remove(droneGroup);
+    droneGroup=new THREE.Group(); propellers=[];
+    const bc=new THREE.Color(CONFIG.visualization.drone_model.body_color);
+    const pc=new THREE.Color(CONFIG.visualization.drone_model.prop_color);
+    const n=CONFIG.vehicle.arm_count||4;
+    const body=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.25,0.6),new THREE.MeshPhongMaterial({color:bc}));
+    body.castShadow=true; droneGroup.add(body);
+    const front=new THREE.Mesh(new THREE.ConeGeometry(0.12,0.3,8),new THREE.MeshPhongMaterial({color:0xff4444}));
+    front.rotation.x=-Math.PI/2; front.position.set(0,0.05,-0.45); droneGroup.add(front);
+    const al=1.2;
+    for(let i=0;i<n;i++){
+        const a=(i/n)*Math.PI*2-Math.PI/4, mx=Math.cos(a)*al, mz=Math.sin(a)*al;
+        const arm=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,al,8),new THREE.MeshPhongMaterial({color:bc}));
+        arm.rotation.z=Math.PI/2; arm.rotation.y=a; arm.position.set(Math.cos(a)*al/2,0,Math.sin(a)*al/2);
+        arm.castShadow=true; droneGroup.add(arm);
+        const motor=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.12,0.12,12),new THREE.MeshPhongMaterial({color:0x222222}));
+        motor.position.set(mx,0.1,mz); droneGroup.add(motor);
+        const prop=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.4,0.02,16),new THREE.MeshPhongMaterial({color:pc,transparent:true,opacity:0.6}));
+        prop.position.set(mx,0.2,mz); droneGroup.add(prop); propellers.push(prop);
+    }
+    scene.add(droneGroup);
+}
+
+function update3D(data) {
+    if(!droneGroup||!data.position) return;
+    const hLat=CONFIG.simulation.home_lat, hLon=CONFIG.simulation.home_lon;
+    const dx=(data.position.lon-hLon)*111320*Math.cos(hLat*Math.PI/180);
+    const dz=-(data.position.lat-hLat)*110540;
+    const alt=data.position.alt||0;
+    droneGroup.position.set(dx,alt,dz);
+    if(data.attitude) droneGroup.rotation.set((data.attitude.pitch||0)*Math.PI/180,-(data.attitude.yaw||0)*Math.PI/180,-(data.attitude.roll||0)*Math.PI/180,'YXZ');
+    if(data.armed) propellers.forEach((p,i)=>{p.rotation.y+=(i%2===0?0.5:-0.5);});
+    if(CONFIG.visualization.show_trail){
+        trailPoints.push(new THREE.Vector3(dx,alt,dz));
+        if(trailPoints.length>CONFIG.visualization.trail_length) trailPoints.shift();
+        const g=new THREE.BufferGeometry().setFromPoints(trailPoints); trailLine.geometry.dispose(); trailLine.geometry=g;
+    }
+    if(CONFIG.visualization.camera_follow) controls.target.set(dx,alt,dz);
+}
+
+function onResize() {
+    const c=document.getElementById('three-canvas').parentElement;
+    camera.aspect=c.clientWidth/c.clientHeight; camera.updateProjectionMatrix();
+    renderer.setSize(c.clientWidth,c.clientHeight);
+    if(map) setTimeout(()=>map.invalidateSize(),100);
+}
+function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene,camera); }
+
+// ── Leaflet Map ────────────────────────────────────────────
+let map, droneMarker, trailPolyline, homeMarker, mapReady=false, mapFollow=true;
+
+function initMap() {
+    if(mapReady) return;
+
+    const el = document.getElementById('map');
+    const w = el.clientWidth, h = el.clientHeight;
+    clog('SYS', `Map container: ${w}x${h}px`);
+
+    // If container has no size yet, retry
+    if (w < 10 || h < 10) {
+        setTimeout(initMap, 300);
+        return;
+    }
+
+    mapReady = true;
+    const lat=CONFIG.simulation.home_lat, lon=CONFIG.simulation.home_lon;
+
+    map = L.map('map', {zoomControl:false, preferCanvas:true}).setView([lat,lon],17);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'',maxZoom:19}).addTo(map);
+    L.control.zoom({position:'topright'}).addTo(map);
+
+    homeMarker = L.circleMarker([lat,lon],{radius:8,color:'#ff4444',fillColor:'#ff4444',fillOpacity:0.5,weight:2}).addTo(map).bindTooltip('Home');
+    droneMarker = L.marker([lat,lon],{icon:makeDroneIcon(0)}).addTo(map);
+    trailPolyline = L.polyline([],{color:'#5cb8ff',weight:2,opacity:0.7}).addTo(map);
+
+    map.on('dragstart',()=>{mapFollow=false;}); map.on('dblclick',()=>{mapFollow=true;});
+
+    // Aggressively invalidate to ensure tiles render
+    function fixMap() { map.invalidateSize(); map.setView([lat,lon],17); }
+    [100,300,600,1000,2000,4000].forEach(ms=>setTimeout(fixMap,ms));
+
+    clog('SYS', `Map ready at (${lat.toFixed(4)}, ${lon.toFixed(4)})`, 'log-ok');
+}
+
+function makeDroneIcon(hdg) {
+    return L.divIcon({className:'',iconSize:[24,24],iconAnchor:[12,12],
+        html:`<svg width="24" height="24" viewBox="-12 -12 24 24" style="transform:rotate(${hdg}deg)"><polygon points="0,-10 7,8 0,4 -7,8" fill="#5cb8ff" stroke="#fff" stroke-width="1"/></svg>`});
+}
+
+function updateMap(data) {
+    // Always update coordinate overlay even if map isn't ready
+    if(data.position) {
+        const lat=data.position.lat, lon=data.position.lon, alt=data.position.alt||0;
+        document.getElementById('map-coords').textContent =
+            `${lat.toFixed(6)}, ${lon.toFixed(6)}  alt=${alt.toFixed(1)}m`;
+    }
+
+    if(!map||!data.position) return;
+    const lat=data.position.lat, lon=data.position.lon;
+    if(lat===0&&lon===0) return;
+    droneMarker.setLatLng([lat,lon]);
+    droneMarker.setIcon(makeDroneIcon(data.heading||0));
+    if(mapFollow) map.panTo([lat,lon],{animate:false});
+    trailPolyline.addLatLng([lat,lon]);
+    const c=trailPolyline.getLatLngs();
+    if(c.length>CONFIG.visualization.trail_length) trailPolyline.setLatLngs(c.slice(-CONFIG.visualization.trail_length));
+}
+
+// ── Init ───────────────────────────────────────────────────
+try { init3D(); } catch(e) { clog('SYS', '3D init error: '+e.message, 'log-err'); }
+// Delay map init to ensure container has dimensions
+setTimeout(initMap, 500);
+clog('SYS', 'Dashboard initialized');
+</script>
+</body>
+</html>
