@@ -208,18 +208,21 @@
 </div>
 
 <div class="main">
-    <!-- Top-left: 3D -->
+    <!-- Top-left: Gazebo 3D chase view + downward cam overlay -->
     <div class="panel-3d">
-        <canvas id="three-canvas"></canvas>
+        <!-- Chase camera (main view) -->
+        <img id="chase-img" style="width:100%;height:100%;object-fit:cover;display:none;" alt="Chase Cam">
+        <div id="chase-no-signal" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#556677;font-size:1.2em;font-family:monospace;background:#0a1018;">GAZEBO 3D: WAITING FOR CAMERA...</div>
+        <canvas id="three-canvas" style="display:none;"></canvas>
         <div class="hud-overlay">
             <div>ALT: <span class="hud-val" id="hud-alt">0.0</span> m</div>
             <div>SPD: <span class="hud-val" id="hud-spd">0.0</span> m/s</div>
             <div>HDG: <span class="hud-val" id="hud-hdg">0</span>&deg;</div>
         </div>
         <div class="camera-overlay" id="camera-overlay" onclick="toggleCamera()">
-            <div class="camera-no-signal" id="camera-no-signal">CAMERA: NO SIGNAL</div>
-            <img id="camera-img" style="display:none;" alt="Camera">
-            <div class="camera-label" id="camera-label">CAM</div>
+            <div class="camera-no-signal" id="camera-no-signal">DOWN CAM: NO SIGNAL</div>
+            <img id="camera-img" style="display:none;" alt="Down Camera">
+            <div class="camera-label" id="camera-label">DOWN</div>
         </div>
     </div>
 
@@ -378,7 +381,19 @@ socket.on('demo_status', (data) => {
     }
 });
 
-// ── Camera feed ────────────────────────────────────────────
+// ── Chase camera (main 3D view) ────────────────────────────
+let chaseFrames = 0;
+socket.on('chase_frame', (data) => {
+    const img = document.getElementById('chase-img');
+    const noSig = document.getElementById('chase-no-signal');
+    img.src = 'data:image/jpeg;base64,' + data.data;
+    img.style.display = 'block';
+    noSig.style.display = 'none';
+    chaseFrames++;
+    if (chaseFrames === 1) clog('SYS', 'Chase camera connected', 'log-ok');
+});
+
+// ── Downward camera (overlay) ──────────────────────────────
 let cameraFrames = 0;
 socket.on('camera_frame', (data) => {
     const img = document.getElementById('camera-img');

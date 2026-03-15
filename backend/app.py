@@ -145,8 +145,14 @@ def handle_fly(data):
 
 @socketio.on("camera_frame")
 def handle_camera_frame(data):
-    """Forward camera frame from bridge to all browser clients."""
+    """Forward downward camera frame to browser clients."""
     socketio.emit("camera_frame", data)
+
+
+@socketio.on("chase_frame")
+def handle_chase_frame(data):
+    """Forward chase camera frame to browser clients."""
+    socketio.emit("chase_frame", data)
 
 
 @socketio.on("demo_roundtrip")
