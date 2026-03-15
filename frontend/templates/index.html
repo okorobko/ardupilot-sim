@@ -208,11 +208,11 @@
 </div>
 
 <div class="main">
-    <!-- Top-left: Gazebo 3D chase view + downward cam overlay -->
+    <!-- Top-left: Downward cam (main) + chase cam (overlay) -->
     <div class="panel-3d">
-        <!-- Chase camera (main view) -->
-        <img id="chase-img" style="width:100%;height:100%;object-fit:cover;display:none;" alt="Chase Cam">
-        <div id="chase-no-signal" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#556677;font-size:1.2em;font-family:monospace;background:#0a1018;">GAZEBO 3D: WAITING FOR CAMERA...</div>
+        <!-- Downward camera (main view) -->
+        <img id="camera-img" style="width:100%;height:100%;object-fit:cover;display:none;" alt="Down Camera">
+        <div id="camera-no-signal" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#556677;font-size:1.2em;font-family:monospace;background:#0a1018;">CAMERA: WAITING FOR SIGNAL...</div>
         <canvas id="three-canvas" style="display:none;"></canvas>
         <div class="hud-overlay">
             <div>ALT: <span class="hud-val" id="hud-alt">0.0</span> m</div>
@@ -220,9 +220,9 @@
             <div>HDG: <span class="hud-val" id="hud-hdg">0</span>&deg;</div>
         </div>
         <div class="camera-overlay" id="camera-overlay" onclick="toggleCamera()">
-            <div class="camera-no-signal" id="camera-no-signal">DOWN CAM: NO SIGNAL</div>
-            <img id="camera-img" style="display:none;" alt="Down Camera">
-            <div class="camera-label" id="camera-label">DOWN</div>
+            <div class="camera-no-signal" id="chase-no-signal">CHASE: NO SIGNAL</div>
+            <img id="chase-img" style="display:none;" alt="Chase Camera">
+            <div class="camera-label" id="chase-label">CHASE</div>
         </div>
     </div>
 
@@ -381,7 +381,19 @@ socket.on('demo_status', (data) => {
     }
 });
 
-// ── Chase camera (main 3D view) ────────────────────────────
+// ── Downward camera (main view) ────────────────────────────
+let cameraFrames = 0;
+socket.on('camera_frame', (data) => {
+    const img = document.getElementById('camera-img');
+    const noSig = document.getElementById('camera-no-signal');
+    img.src = 'data:image/jpeg;base64,' + data.data;
+    img.style.display = 'block';
+    noSig.style.display = 'none';
+    cameraFrames++;
+    if (cameraFrames === 1) clog('SYS', 'Downward camera connected', 'log-ok');
+});
+
+// ── Chase camera (overlay) ─────────────────────────────────
 let chaseFrames = 0;
 socket.on('chase_frame', (data) => {
     const img = document.getElementById('chase-img');
@@ -391,19 +403,6 @@ socket.on('chase_frame', (data) => {
     noSig.style.display = 'none';
     chaseFrames++;
     if (chaseFrames === 1) clog('SYS', 'Chase camera connected', 'log-ok');
-});
-
-// ── Downward camera (overlay) ──────────────────────────────
-let cameraFrames = 0;
-socket.on('camera_frame', (data) => {
-    const img = document.getElementById('camera-img');
-    const noSig = document.getElementById('camera-no-signal');
-    img.src = 'data:image/jpeg;base64,' + data.data;
-    img.style.display = 'block';
-    noSig.style.display = 'none';
-    cameraFrames++;
-    document.getElementById('camera-label').textContent = `CAM ${cameraFrames}`;
-    if (cameraFrames === 1) clog('SYS', 'Camera feed connected', 'log-ok');
 });
 
 function toggleCamera() {

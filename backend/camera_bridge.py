@@ -85,8 +85,8 @@ def stream_camera(sio, topic, event_name, fps, label):
 def main():
     print("=" * 50, flush=True)
     print("  Gazebo Camera Bridge (dual)", flush=True)
-    print("  Chase cam: /chase_cam → chase_frame (5fps)", flush=True)
-    print("  Down cam:  /camera → camera_frame (3fps)", flush=True)
+    print("  Down cam:  /camera → camera_frame (5fps, main)", flush=True)
+    print("  Chase cam: /chase_cam → chase_frame (3fps, overlay)", flush=True)
     print(f"  Backend: {BACKEND_URL}", flush=True)
     print("=" * 50, flush=True)
 
@@ -95,17 +95,17 @@ def main():
     sio.connect(BACKEND_URL)
     print("Connected!", flush=True)
 
-    # Stream chase cam in a thread
+    # Stream chase cam in a thread (overlay, lower fps)
     t_chase = threading.Thread(
         target=stream_camera,
-        args=(sio, "/chase_cam", "chase_frame", 5, "CHASE"),
+        args=(sio, "/chase_cam", "chase_frame", 3, "CHASE"),
         daemon=True,
     )
     t_chase.start()
 
-    # Stream downward cam in main thread
+    # Stream downward cam in main thread (main view, higher fps)
     try:
-        stream_camera(sio, "/camera", "camera_frame", 3, "DOWN")
+        stream_camera(sio, "/camera", "camera_frame", 5, "DOWN")
     except KeyboardInterrupt:
         print("\nStopping...", flush=True)
     finally:
