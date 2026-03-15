@@ -269,22 +269,29 @@ class MAVLinkBridge:
         """Send velocity command in body frame (GUIDED mode).
 
         vx: forward (m/s), vy: right (m/s), vz: down (m/s), yaw_rate: rad/s
+        Uses BODY_NED frame so ArduPilot handles body→NED conversion.
+        Holds current yaw when yaw_rate is 0.
         """
-        # Convert body-frame to NED using current yaw
-        yaw_rad = math.radians(self.attitude.get("yaw", 0))
-        vn = vx * math.cos(yaw_rad) - vy * math.sin(yaw_rad)
-        ve = vx * math.sin(yaw_rad) + vy * math.cos(yaw_rad)
+        if yaw_rate != 0:
+            # Yaw rate mode: control vx/vy/vz + yaw_rate
+            type_mask = 0b0000011111000111  # use vx,vy,vz,yaw_rate
+            yaw = 0
+        else:
+            # Hold heading: control vx/vy/vz + yaw (hold current)
+            type_mask = 0b0000101111000111  # use vx,vy,vz,yaw
+            yaw = math.radians(self.heading)
+            yaw_rate = 0
 
         self.conn.mav.set_position_target_local_ned_send(
             0,  # time_boot_ms
             self.conn.target_system,
             self.conn.target_component,
-            mavutil.mavlink.MAV_FRAME_LOCAL_NED,
-            0b0000111111000111,  # type_mask: use only vx, vy, vz, yaw_rate
+            8,  # MAV_FRAME_BODY_NED (body-relative velocities)
+            type_mask,
             0, 0, 0,            # x, y, z (ignored)
-            vn, ve, vz,         # vx, vy, vz (NED)
+            vx, vy, vz,         # body-frame: forward, right, down
             0, 0, 0,            # afx, afy, afz (ignored)
-            0, yaw_rate,        # yaw (ignored), yaw_rate
+            yaw, yaw_rate,
         )
 
     def goto_position(self, lat, lon, alt):
