@@ -95,26 +95,28 @@ def handle_command(data):
         result = bridge.disarm()
         socketio.emit("log", {"message": f"ACK disarm: {result['message']}", "tag": "DRONE"})
     elif cmd == "takeoff":
-        import time
         altitude = data.get("altitude", 10)
-        # Set GUIDED mode
-        socketio.emit("log", {"message": "SET_MODE GUIDED", "tag": "CONTROL"})
-        bridge.set_mode("GUIDED")
-        time.sleep(1)
-        # Auto-arm if not armed
-        if not bridge.armed:
-            socketio.emit("log", {"message": "MAV_CMD_COMPONENT_ARM_DISARM (auto-arm)", "tag": "CONTROL"})
-            arm_result = bridge.arm()
-            socketio.emit("log", {"message": f"ACK arm: {arm_result['message']}", "tag": "DRONE"})
-            if not arm_result["success"]:
-                result = arm_result
-                emit("command_result", result)
-                return
+        emit("command_result", {"success": True, "message": f"Takeoff to {altitude}m initiated..."})
+
+        def _do_takeoff(alt):
+            import time
+            socketio.emit("log", {"message": "SET_MODE GUIDED", "tag": "CONTROL"})
+            bridge.set_mode("GUIDED")
             time.sleep(1)
-        # Takeoff
-        socketio.emit("log", {"message": f"MAV_CMD_NAV_TAKEOFF alt={altitude}m", "tag": "CONTROL"})
-        result = bridge.takeoff(altitude)
-        socketio.emit("log", {"message": f"ACK takeoff: {result['message']}", "tag": "DRONE"})
+            if not bridge.armed:
+                socketio.emit("log", {"message": "MAV_CMD_COMPONENT_ARM_DISARM (auto-arm)", "tag": "CONTROL"})
+                arm_result = bridge.arm()
+                socketio.emit("log", {"message": f"ACK arm: {arm_result['message']}", "tag": "DRONE"})
+                if not arm_result["success"]:
+                    socketio.emit("command_result", arm_result)
+                    return
+                time.sleep(1)
+            socketio.emit("log", {"message": f"MAV_CMD_NAV_TAKEOFF alt={alt}m", "tag": "CONTROL"})
+            result = bridge.takeoff(alt)
+            socketio.emit("log", {"message": f"ACK takeoff: {result['message']}", "tag": "DRONE"})
+
+        threading.Thread(target=_do_takeoff, args=(altitude,), daemon=True).start()
+        return  # Don't emit result again
     elif cmd == "land":
         socketio.emit("log", {"message": "SET_MODE LAND", "tag": "CONTROL"})
         result = bridge.set_mode("LAND")
