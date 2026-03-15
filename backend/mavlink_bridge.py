@@ -266,31 +266,36 @@ class MAVLinkBridge:
         return {"success": True, "message": f"Mode set to {mode_name}"}
 
     def send_velocity(self, vx, vy, vz, yaw_rate=0):
-        """Send velocity command in body frame (GUIDED mode).
+        """Send velocity command in body frame, converted to NED.
 
         vx: forward (m/s), vy: right (m/s), vz: down (m/s), yaw_rate: rad/s
-        Uses BODY_NED frame so ArduPilot handles body→NED conversion.
-        Holds current yaw when yaw_rate is 0.
+        Converts body→NED manually and holds yaw via position target.
         """
+        # Body to NED conversion using current heading
+        hdg_rad = math.radians(self.heading)
+        vn = vx * math.cos(hdg_rad) - vy * math.sin(hdg_rad)
+        ve = vx * math.sin(hdg_rad) + vy * math.cos(hdg_rad)
+        vd = vz  # NED down
+
         if yaw_rate != 0:
-            # Yaw rate mode: control vx/vy/vz + yaw_rate
-            type_mask = 0b0000011111000111  # use vx,vy,vz,yaw_rate
+            # Yaw rate mode
+            type_mask = 0b0000011111000111  # vx,vy,vz + yaw_rate
             yaw = 0
         else:
-            # Hold heading: control vx/vy/vz + yaw (hold current)
-            type_mask = 0b0000101111000111  # use vx,vy,vz,yaw
-            yaw = math.radians(self.heading)
+            # Hold current heading
+            type_mask = 0b0000101111000111  # vx,vy,vz + yaw
+            yaw = hdg_rad
             yaw_rate = 0
 
         self.conn.mav.set_position_target_local_ned_send(
-            0,  # time_boot_ms
+            0,
             self.conn.target_system,
             self.conn.target_component,
-            8,  # MAV_FRAME_BODY_NED (body-relative velocities)
+            mavutil.mavlink.MAV_FRAME_LOCAL_NED,
             type_mask,
-            0, 0, 0,            # x, y, z (ignored)
-            vx, vy, vz,         # body-frame: forward, right, down
-            0, 0, 0,            # afx, afy, afz (ignored)
+            0, 0, 0,
+            vn, ve, vd,
+            0, 0, 0,
             yaw, yaw_rate,
         )
 
