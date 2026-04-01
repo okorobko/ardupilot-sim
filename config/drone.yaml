@@ -20,3 +20,17 @@ visualization:
   drone_model:
     body_color: "#333333"
     prop_color: "#22aa44"
+
+detection:
+  enabled: false
+  model_path: ml/models/mil_vehicle_v1/weights/best.onnx
+  conf_threshold: 0.35
+  iou_threshold: 0.45
+  classes:
+    - tank
+    - apc_ifv
+    - military_truck
+    - sp_artillery
+    - mlrs
+    - helicopter
+    - uav

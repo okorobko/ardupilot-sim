@@ -1,0 +1,29 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <model name="apc_bmp2">
+    <static>true</static>
+    <pose>0 0 0.55 0 0 0</pose>
+    <link name="body">
+      <!-- Hull: 6.7 x 3.1 x 1.1m -->
+      <visual name="hull">
+        <geometry><box><size>6.7 3.1 1.1</size></box></geometry>
+        <material>
+          <ambient>0.22 0.28 0.15 1</ambient>
+          <diffuse>0.28 0.33 0.18 1</diffuse>
+        </material>
+      </visual>
+      <!-- Small turret: 1.5 x 1.5 x 0.6m -->
+      <visual name="turret">
+        <pose>0.2 0 0.85 0 0 0</pose>
+        <geometry><box><size>1.5 1.5 0.6</size></box></geometry>
+        <material>
+          <ambient>0.19 0.25 0.12 1</ambient>
+          <diffuse>0.25 0.30 0.15 1</diffuse>
+        </material>
+      </visual>
+      <collision name="collision">
+        <geometry><box><size>6.7 3.1 1.1</size></box></geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

@@ -1,0 +1,79 @@
+# YOLOv8n Training Configuration
+# Military Vehicle Detection from Aerial/Drone Imagery
+
+model:
+  name: yolov8n
+  pretrained: yolov8n.pt  # COCO pretrained weights
+  imgsz: 640
+
+# Phase 1: Frozen backbone warmup
+warmup:
+  epochs: 10
+  lr0: 0.001
+  freeze: 10  # freeze first 10 layers (backbone)
+  batch: 16
+
+# Phase 2: Full fine-tune
+training:
+  epochs: 150
+  lr0: 0.01
+  lrf: 0.01  # final LR = lr0 * lrf (cosine decay)
+  batch: 16
+  optimizer: SGD
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 3
+  warmup_momentum: 0.8
+  warmup_bias_lr: 0.1
+
+# Augmentation (aerial-optimized)
+augmentation:
+  hsv_h: 0.015
+  hsv_s: 0.7
+  hsv_v: 0.4
+  degrees: 180.0  # full rotation — aerial views have no canonical orientation
+  translate: 0.1
+  scale: 0.5
+  shear: 0.0
+  perspective: 0.0
+  flipud: 0.5  # vertical flip — common for overhead
+  fliplr: 0.5
+  mosaic: 1.0
+  mixup: 0.1
+  copy_paste: 0.0
+
+# Export targets
+export:
+  onnx:
+    opset: 12
+    simplify: true
+    dynamic: false
+  tensorrt:
+    half: true  # FP16
+    workspace: 4  # GB
+  tflite:
+    int8: true
+    nms: true
+  hailo:
+    # Hailo Model Zoo has YOLOv8n recipes
+    # Export via hailo_sdk_client after ONNX
+    calibration_images: 300
+
+# Performance targets
+targets:
+  jetson_orin_nano:
+    precision: FP16
+    target_fps: 30
+    max_latency_ms: 33
+  rpi5_hailo8l:
+    precision: INT8
+    target_fps: 25
+    max_latency_ms: 40
+  nxp_imx8m:
+    precision: INT8
+    target_fps: 8
+    max_latency_ms: 120
+  apple_silicon:
+    precision: FP32
+    target_fps: 25
+    max_latency_ms: 40

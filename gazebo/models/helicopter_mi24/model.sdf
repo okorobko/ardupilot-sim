@@ -1,0 +1,101 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <model name="helicopter_mi24">
+    <static>true</static>
+    <pose>0 0 0.8 0 0 0</pose>
+    <link name="body">
+      <!-- Fuselage: 6.0 x 2.0 x 2.0m (main body) -->
+      <visual name="fuselage">
+        <geometry><box><size>6.0 2.0 2.0</size></box></geometry>
+        <material>
+          <ambient>0.15 0.22 0.12 1</ambient>
+          <diffuse>0.20 0.27 0.15 1</diffuse>
+        </material>
+      </visual>
+      <!-- Cockpit: 2.0 x 1.5 x 1.2m (front, slightly lower) -->
+      <visual name="cockpit">
+        <pose>3.5 0 -0.3 0 0 0</pose>
+        <geometry><box><size>2.0 1.5 1.2</size></box></geometry>
+        <material>
+          <ambient>0.12 0.18 0.10 1</ambient>
+          <diffuse>0.17 0.23 0.13 1</diffuse>
+        </material>
+      </visual>
+      <!-- Tail boom: 5.0 x 0.8 x 0.8m (extending back) -->
+      <visual name="tail_boom">
+        <pose>-5.5 0 0.2 0 0 0</pose>
+        <geometry><box><size>5.0 0.8 0.8</size></box></geometry>
+        <material>
+          <ambient>0.15 0.22 0.12 1</ambient>
+          <diffuse>0.20 0.27 0.15 1</diffuse>
+        </material>
+      </visual>
+      <!-- Main rotor disk: 14.0 x 14.0 x 0.05m flat disk (very thin) -->
+      <visual name="rotor_disk">
+        <pose>0 0 1.5 0 0 0</pose>
+        <geometry><box><size>14.0 14.0 0.05</size></box></geometry>
+        <material>
+          <ambient>0.3 0.3 0.3 0.3</ambient>
+          <diffuse>0.4 0.4 0.4 0.3</diffuse>
+        </material>
+      </visual>
+      <!-- Landing skid left -->
+      <visual name="skid_left">
+        <pose>0 -1.0 -1.2 0 0 0</pose>
+        <geometry><box><size>4.0 0.15 0.15</size></box></geometry>
+        <material>
+          <ambient>0.12 0.15 0.08 1</ambient>
+          <diffuse>0.17 0.20 0.11 1</diffuse>
+        </material>
+      </visual>
+      <!-- Landing skid right -->
+      <visual name="skid_right">
+        <pose>0 1.0 -1.2 0 0 0</pose>
+        <geometry><box><size>4.0 0.15 0.15</size></box></geometry>
+        <material>
+          <ambient>0.12 0.15 0.08 1</ambient>
+          <diffuse>0.17 0.20 0.11 1</diffuse>
+        </material>
+      </visual>
+      <!-- Skid strut left front -->
+      <visual name="strut_lf">
+        <pose>1.0 -1.0 -0.7 0 0 0</pose>
+        <geometry><box><size>0.1 0.1 1.0</size></box></geometry>
+        <material>
+          <ambient>0.12 0.15 0.08 1</ambient>
+          <diffuse>0.17 0.20 0.11 1</diffuse>
+        </material>
+      </visual>
+      <!-- Skid strut left rear -->
+      <visual name="strut_lr">
+        <pose>-1.0 -1.0 -0.7 0 0 0</pose>
+        <geometry><box><size>0.1 0.1 1.0</size></box></geometry>
+        <material>
+          <ambient>0.12 0.15 0.08 1</ambient>
+          <diffuse>0.17 0.20 0.11 1</diffuse>
+        </material>
+      </visual>
+      <!-- Skid strut right front -->
+      <visual name="strut_rf">
+        <pose>1.0 1.0 -0.7 0 0 0</pose>
+        <geometry><box><size>0.1 0.1 1.0</size></box></geometry>
+        <material>
+          <ambient>0.12 0.15 0.08 1</ambient>
+          <diffuse>0.17 0.20 0.11 1</diffuse>
+        </material>
+      </visual>
+      <!-- Skid strut right rear -->
+      <visual name="strut_rr">
+        <pose>-1.0 1.0 -0.7 0 0 0</pose>
+        <geometry><box><size>0.1 0.1 1.0</size></box></geometry>
+        <material>
+          <ambient>0.12 0.15 0.08 1</ambient>
+          <diffuse>0.17 0.20 0.11 1</diffuse>
+        </material>
+      </visual>
+      <collision name="collision">
+        <geometry><box><size>6.0 2.0 2.0</size></box></geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

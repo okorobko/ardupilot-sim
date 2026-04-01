@@ -1,0 +1,38 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <model name="sp_artillery">
+    <static>true</static>
+    <pose>0 0 0.75 0 0 0</pose>
+    <link name="body">
+      <!-- Hull: 7.5 x 3.4 x 1.5m -->
+      <visual name="hull">
+        <geometry><box><size>7.5 3.4 1.5</size></box></geometry>
+        <material>
+          <ambient>0.18 0.23 0.13 1</ambient>
+          <diffuse>0.23 0.28 0.16 1</diffuse>
+        </material>
+      </visual>
+      <!-- Large turret: 3.5 x 2.8 x 1.0m -->
+      <visual name="turret">
+        <pose>-0.5 0 1.25 0 0 0</pose>
+        <geometry><box><size>3.5 2.8 1.0</size></box></geometry>
+        <material>
+          <ambient>0.15 0.20 0.10 1</ambient>
+          <diffuse>0.20 0.25 0.13 1</diffuse>
+        </material>
+      </visual>
+      <!-- Very long gun barrel: 0.35 x 0.35 x 7.0m -->
+      <visual name="gun_barrel">
+        <pose>4.5 0 1.25 0 0 0</pose>
+        <geometry><box><size>7.0 0.35 0.35</size></box></geometry>
+        <material>
+          <ambient>0.13 0.17 0.08 1</ambient>
+          <diffuse>0.18 0.22 0.11 1</diffuse>
+        </material>
+      </visual>
+      <collision name="collision">
+        <geometry><box><size>7.5 3.4 1.5</size></box></geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

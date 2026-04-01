@@ -5,12 +5,16 @@ Captures frames from two Gazebo camera topics:
   - /chase_cam (800x600) → main 3D panel (third-person view)
   - /camera (640x480) → overlay (downward view for ML detection)
 
+Optionally runs YOLOv8n military vehicle detection on downward camera frames.
+
 Usage (requires gz_garden conda env):
     conda activate gz_garden
-    python3 backend/camera_bridge.py
+    python3 backend/camera_bridge.py [--detect path/to/model.onnx]
 """
 
+import argparse
 import base64
+import json
 import re
 import subprocess
 import sys
@@ -24,9 +28,16 @@ import socketio
 BACKEND_URL = "http://localhost:5001"
 JPEG_QUALITY = 55
 
+# Global detector instance (None if detection disabled)
+_detector = None
 
-def capture_frame(topic, width=640, height=480):
-    """Capture one frame from a Gazebo camera topic."""
+
+def capture_frame_raw(topic, width=640, height=480):
+    """Capture one raw BGR frame from a Gazebo camera topic.
+
+    Returns:
+        numpy array (H, W, 3) BGR or None on failure.
+    """
     try:
         result = subprocess.run(
             ["gz", "topic", "-e", "-t", topic, "-n", "1"],
@@ -52,30 +63,81 @@ def capture_frame(topic, width=640, height=480):
             return None
 
         img = np.frombuffer(raw_bytes[:expected], dtype=np.uint8).reshape((h, w, 3))
-        img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        _, jpeg = cv2.imencode(".jpg", img_bgr, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
-        return base64.b64encode(jpeg.tobytes()).decode("utf-8")
+        return cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
     except subprocess.TimeoutExpired:
         return None
-    except Exception as e:
+    except Exception:
         return None
 
 
-def stream_camera(sio, topic, event_name, fps, label):
-    """Stream a camera topic to the backend."""
+def frame_to_b64(img_bgr):
+    """Encode BGR frame as base64 JPEG."""
+    _, jpeg = cv2.imencode(".jpg", img_bgr, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
+    return base64.b64encode(jpeg.tobytes()).decode("utf-8")
+
+
+def capture_frame(topic, width=640, height=480):
+    """Capture one frame from a Gazebo camera topic as base64 JPEG."""
+    img = capture_frame_raw(topic, width, height)
+    if img is None:
+        return None
+    return frame_to_b64(img)
+
+
+def stream_camera(sio, topic, event_name, fps, label, run_detection=False):
+    """Stream a camera topic to the backend.
+
+    Args:
+        sio: SocketIO client.
+        topic: Gazebo camera topic.
+        event_name: SocketIO event name for frame data.
+        fps: Target frames per second.
+        label: Label for logging.
+        run_detection: If True, run ML detection on frames and emit results.
+    """
     interval = 1.0 / fps
     count = 0
-    print(f"  [{label}] Streaming {topic} → {event_name} at {fps}fps", flush=True)
+    detect_count = 0
+    print(f"  [{label}] Streaming {topic} → {event_name} at {fps}fps"
+          f"{' + detection' if run_detection else ''}", flush=True)
 
     while True:
         start = time.time()
-        b64 = capture_frame(topic)
-        if b64:
-            sio.emit(event_name, {"data": b64})
-            count += 1
-            if count % (fps * 10) == 0:
-                print(f"  [{label}] {count} frames sent", flush=True)
+
+        if run_detection and _detector is not None:
+            # Capture raw frame for detection
+            img_bgr = capture_frame_raw(topic)
+            if img_bgr is not None:
+                # Run detection
+                detections = _detector.detect(img_bgr)
+                latency = _detector.latency_ms
+
+                # Encode frame (without drawn boxes — frontend draws them)
+                b64 = frame_to_b64(img_bgr)
+                sio.emit(event_name, {"data": b64})
+
+                # Emit detection results
+                if detections:
+                    sio.emit("detection_results", {
+                        "detections": detections,
+                        "latency_ms": round(latency, 1),
+                        "frame_id": count,
+                    })
+                    detect_count += 1
+
+                count += 1
+                if count % (fps * 10) == 0:
+                    print(f"  [{label}] {count} frames, {detect_count} w/detections, "
+                          f"latency={latency:.1f}ms", flush=True)
+        else:
+            b64 = capture_frame(topic)
+            if b64:
+                sio.emit(event_name, {"data": b64})
+                count += 1
+                if count % (fps * 10) == 0:
+                    print(f"  [{label}] {count} frames sent", flush=True)
+
         elapsed = time.time() - start
         sleep_time = max(0, interval - elapsed)
         if sleep_time > 0:
@@ -83,16 +145,45 @@ def stream_camera(sio, topic, event_name, fps, label):
 
 
 def main():
+    global _detector
+
+    parser = argparse.ArgumentParser(description="Gazebo Camera Bridge")
+    parser.add_argument("--detect", type=str, default=None,
+                        help="Path to ONNX model for vehicle detection")
+    parser.add_argument("--conf", type=float, default=0.35,
+                        help="Detection confidence threshold (default: 0.35)")
+    parser.add_argument("--backend", type=str, default=BACKEND_URL,
+                        help=f"Backend URL (default: {BACKEND_URL})")
+    args = parser.parse_args()
+
+    # Initialize detector if model provided
+    if args.detect:
+        try:
+            from detector import VehicleDetector
+            _detector = VehicleDetector(
+                args.detect,
+                conf_threshold=args.conf,
+            )
+            print(f"  Detector loaded: {args.detect}", flush=True)
+            print(f"  Confidence threshold: {args.conf}", flush=True)
+        except Exception as e:
+            print(f"  WARNING: Failed to load detector: {e}", flush=True)
+            print(f"  Continuing without detection...", flush=True)
+
+    detect_enabled = _detector is not None
+
     print("=" * 50, flush=True)
     print("  Gazebo Camera Bridge (dual)", flush=True)
     print("  Down cam:  /camera → camera_frame (5fps, main)", flush=True)
     print("  Chase cam: /chase_cam → chase_frame (3fps, overlay)", flush=True)
-    print(f"  Backend: {BACKEND_URL}", flush=True)
+    if detect_enabled:
+        print("  Detection: ENABLED (military vehicles)", flush=True)
+    print(f"  Backend: {args.backend}", flush=True)
     print("=" * 50, flush=True)
 
     sio = socketio.Client()
     print("Connecting to backend...", flush=True)
-    sio.connect(BACKEND_URL)
+    sio.connect(args.backend)
     print("Connected!", flush=True)
 
     # Stream chase cam in a thread (overlay, lower fps)
@@ -103,9 +194,10 @@ def main():
     )
     t_chase.start()
 
-    # Stream downward cam in main thread (main view, higher fps)
+    # Stream downward cam in main thread (main view, higher fps + detection)
     try:
-        stream_camera(sio, "/camera", "camera_frame", 5, "DOWN")
+        stream_camera(sio, "/camera", "camera_frame", 5, "DOWN",
+                       run_detection=detect_enabled)
     except KeyboardInterrupt:
         print("\nStopping...", flush=True)
     finally:

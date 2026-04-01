@@ -1,0 +1,480 @@
+{
+  "timestamp": "2026-03-29T09:22:31",
+  "summary": {
+    "total_tests": 56,
+    "passed": 56,
+    "failed": 0,
+    "pass_rate": "100.0%"
+  },
+  "sections": {
+    "Config": {
+      "passed": 9,
+      "total": 9,
+      "tests": [
+        {
+          "name": "dataset.yaml exists",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "dataset.yaml has 7 classes",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "train_config.yaml exists and valid",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "train_config has correct phase params",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "ml/requirements.txt has ultralytics",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "dataset.yaml class names match detector.py",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "drone.yaml has detection section",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "data directories exist",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": ".gitignore covers ml/data and ml/models",
+          "passed": true,
+          "message": ""
+        }
+      ]
+    },
+    "Gazebo Models": {
+      "passed": 8,
+      "total": 8,
+      "tests": [
+        {
+          "name": "all 6 military vehicle models exist",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "all model SDFs are valid XML",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "all models are static",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "tank_t72 dimensions correct",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "all models have collision geometry",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "military vehicle colors are olive/green range",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "helicopter has rotor disk >= 10m",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "model proportions are realistic",
+          "passed": true,
+          "message": ""
+        }
+      ]
+    },
+    "World": {
+      "passed": 7,
+      "total": 7,
+      "tests": [
+        {
+          "name": "military_training.sdf exists and valid XML",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "military world has 19 military vehicles",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "military world vehicle distribution",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "military world has drone model",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "military world GPS matches drone.yaml",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "vehicles have unique names",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "vehicles are spread across area (not stacked)",
+          "passed": true,
+          "message": ""
+        }
+      ]
+    },
+    "Detector": {
+      "passed": 12,
+      "total": 12,
+      "tests": [
+        {
+          "name": "detector.py imports cleanly",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "CLASS_NAMES has 7 entries",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "CLASS_COLORS has 7 entries",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "preprocessing: letterbox 640x480 \u2192 640x640",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "preprocessing: letterbox 1920x1080 \u2192 640x640",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "preprocessing: square frame \u2192 no padding",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "NMS: removes overlapping boxes",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "NMS: keeps all non-overlapping boxes",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "NMS: single box returns single box",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "postprocess: empty output returns empty list",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "postprocess: high-confidence detection is returned",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "postprocess: bbox clipping to image bounds",
+          "passed": true,
+          "message": ""
+        }
+      ]
+    },
+    "Pipeline": {
+      "passed": 8,
+      "total": 8,
+      "tests": [
+        {
+          "name": "all ML scripts exist",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "all ML scripts have shebang",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "all ML scripts are executable",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "all ML scripts compile without errors",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "train.py supports two-phase training",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "export_all.py supports ONNX and TFLite",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "prepare_dataset.py handles xView class mapping",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "launch scripts exist and are executable",
+          "passed": true,
+          "message": ""
+        }
+      ]
+    },
+    "Integration": {
+      "passed": 6,
+      "total": 6,
+      "tests": [
+        {
+          "name": "camera_bridge.py has detection support",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "app.py relays detection_results",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "index.html has detection overlay canvas",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "frontend has correct detection colors",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "frontend shows detection stats (count + latency)",
+          "passed": true,
+          "message": ""
+        },
+        {
+          "name": "camera_bridge backwards compatible (no --detect = no detection)",
+          "passed": true,
+          "message": ""
+        }
+      ]
+    },
+    "KPI": {
+      "passed": 6,
+      "total": 6,
+      "tests": [
+        {
+          "name": "KPI: ONNX model exists",
+          "passed": true,
+          "message": "Model: best.onnx (11.7MB)"
+        },
+        {
+          "name": "KPI: ONNX model size < 15MB (edge deployable)",
+          "passed": true,
+          "message": "11.7MB"
+        },
+        {
+          "name": "KPI: inference latency < 40ms on Apple Silicon",
+          "passed": true,
+          "message": "Median: 10.0ms"
+        },
+        {
+          "name": "KPI: FPS >= 25 on Apple Silicon",
+          "passed": true,
+          "message": "99.4 FPS"
+        },
+        {
+          "name": "KPI: model outputs 7 classes",
+          "passed": true,
+          "message": "7 classes"
+        },
+        {
+          "name": "KPI: detection produces valid bbox format",
+          "passed": true,
+          "message": "Format valid (0 dets from noise)"
+        }
+      ]
+    }
+  },
+  "kpis": {
+    "KPI: ONNX model exists": {
+      "passed": true,
+      "value": 11.701628684997559,
+      "target": "< 15MB",
+      "message": "Model: best.onnx (11.7MB)"
+    },
+    "KPI: ONNX model size < 15MB (edge deployable)": {
+      "passed": true,
+      "value": 11.701628684997559,
+      "target": 15.0,
+      "message": "11.7MB"
+    },
+    "KPI: inference latency < 40ms on Apple Silicon": {
+      "passed": true,
+      "value": 9.958082810044289,
+      "target": 40.0,
+      "message": "Median: 10.0ms"
+    },
+    "KPI: FPS >= 25 on Apple Silicon": {
+      "passed": true,
+      "value": 99.43583419385729,
+      "target": 25.0,
+      "message": "99.4 FPS"
+    },
+    "KPI: model outputs 7 classes": {
+      "passed": true,
+      "value": 7,
+      "target": 7,
+      "message": "7 classes"
+    },
+    "KPI: detection produces valid bbox format": {
+      "passed": true,
+      "value": 0,
+      "target": null,
+      "message": "Format valid (0 dets from noise)"
+    }
+  },
+  "dataset": {
+    "target_classes": [
+      "tank",
+      "apc_ifv",
+      "military_truck",
+      "sp_artillery",
+      "mlrs",
+      "helicopter",
+      "uav"
+    ],
+    "num_classes": 7,
+    "target_images": "~11K (6K real + 5K synthetic)",
+    "real_sources": [
+      "xView",
+      "DOTA v2",
+      "Roboflow"
+    ],
+    "synthetic_source": "Gazebo military_training.sdf",
+    "split": "70% train / 15% val / 15% test (synthetic in train+val only)"
+  },
+  "vehicles": {
+    "gazebo_models": {
+      "tank_t72": {
+        "type": "Main Battle Tank",
+        "class": "tank",
+        "hull_lxwxh": "7.0 x 3.6 x 1.2m",
+        "features": "turret + gun barrel (5.0m)",
+        "color": "dark olive drab",
+        "instances_in_world": 4
+      },
+      "apc_bmp2": {
+        "type": "APC / IFV",
+        "class": "apc_ifv",
+        "hull_lxwxh": "6.7 x 3.1 x 1.1m",
+        "features": "small turret",
+        "color": "olive green",
+        "instances_in_world": 4
+      },
+      "military_truck": {
+        "type": "6x6 Cargo Truck",
+        "class": "military_truck",
+        "hull_lxwxh": "~8.0 x 2.4 x 2.0m (cab+cargo)",
+        "features": "cab + khaki cargo bed",
+        "color": "olive drab / khaki",
+        "instances_in_world": 4
+      },
+      "sp_artillery": {
+        "type": "Self-Propelled Gun",
+        "class": "sp_artillery",
+        "hull_lxwxh": "7.5 x 3.4 x 1.5m",
+        "features": "large turret + very long barrel (7.0m)",
+        "color": "dark military green",
+        "instances_in_world": 3
+      },
+      "mlrs_grad": {
+        "type": "Multiple Launch Rocket System",
+        "class": "mlrs",
+        "hull_lxwxh": "~8.0 x 2.4 x 2.0m (truck + launcher)",
+        "features": "angled launcher rack (4.0x2.0x1.5m, -20deg pitch)",
+        "color": "olive drab",
+        "instances_in_world": 2
+      },
+      "helicopter_mi24": {
+        "type": "Attack Helicopter",
+        "class": "helicopter",
+        "hull_lxwxh": "6.0 x 2.0 x 2.0m fuselage",
+        "features": "rotor disk (14m), tail boom (5m), landing skids",
+        "color": "dark camo green",
+        "instances_in_world": 2
+      }
+    },
+    "world_total": 19,
+    "tactical_formations": [
+      "Tank column (3x T-72 + 2x BMP-2) on E-W road",
+      "Artillery battery (3x SP arty) NE field",
+      "MLRS section (2x Grad) NW field",
+      "Supply convoy (3x trucks + 1x APC) N-S road",
+      "Helicopter LZ (2x Mi-24) SE clearing",
+      "Mixed staging area (tank + APC + truck) near origin"
+    ],
+    "note_uav_class": "UAV class (6) has no Gazebo model yet \u2014 needs synthetic/real data only"
+  },
+  "performance_targets": {
+    "apple_silicon_dev": {
+      "precision": "FP32 ONNX",
+      "target_fps": 25,
+      "max_latency_ms": 40
+    },
+    "jetson_orin_nano": {
+      "precision": "FP16 TensorRT",
+      "target_fps": 30,
+      "max_latency_ms": 33
+    },
+    "rpi5_hailo_8l": {
+      "precision": "INT8 HEF",
+      "target_fps": 25,
+      "max_latency_ms": 40
+    },
+    "nxp_imx8m_plus": {
+      "precision": "INT8 TFLite",
+      "target_fps": 8,
+      "max_latency_ms": 120
+    }
+  },
+  "accuracy_targets": {
+    "mAP_50_overall": ">= 0.50 on real-world test set",
+    "per_class_recall_min": ">= 0.40 for each class",
+    "zero_missed_tanks": "tank recall >= 0.60 (critical class)"
+  }
+}

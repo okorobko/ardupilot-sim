@@ -1,0 +1,39 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <model name="mlrs_grad">
+    <static>true</static>
+    <pose>0 0 1.0 0 0 0</pose>
+    <link name="body">
+      <!-- Truck cab: 2.5 x 2.4 x 2.0m (front) -->
+      <visual name="cab">
+        <pose>2.75 0 0 0 0 0</pose>
+        <geometry><box><size>2.5 2.4 2.0</size></box></geometry>
+        <material>
+          <ambient>0.2 0.25 0.15 1</ambient>
+          <diffuse>0.25 0.3 0.18 1</diffuse>
+        </material>
+      </visual>
+      <!-- Flatbed: 5.0 x 2.4 x 0.3m -->
+      <visual name="flatbed">
+        <pose>-1.0 0 -0.85 0 0 0</pose>
+        <geometry><box><size>5.0 2.4 0.3</size></box></geometry>
+        <material>
+          <ambient>0.2 0.25 0.15 1</ambient>
+          <diffuse>0.25 0.3 0.18 1</diffuse>
+        </material>
+      </visual>
+      <!-- Launcher rack: 4.0 x 2.0 x 1.5m, angled ~20 degrees upward -->
+      <visual name="launcher">
+        <pose>-0.8 0 0.3 0 -0.35 0</pose>
+        <geometry><box><size>4.0 2.0 1.5</size></box></geometry>
+        <material>
+          <ambient>0.17 0.22 0.12 1</ambient>
+          <diffuse>0.22 0.27 0.15 1</diffuse>
+        </material>
+      </visual>
+      <collision name="collision">
+        <geometry><box><size>8.0 2.4 2.0</size></box></geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

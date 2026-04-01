@@ -1,0 +1,18 @@
+# Military Vehicle Detection Dataset
+# YOLOv8 format
+
+path: ../data/processed  # relative to this file's parent or absolute
+train: images/train
+val: images/val
+test: images/test
+
+# 7 military vehicle classes
+nc: 7
+names:
+  0: tank
+  1: apc_ifv
+  2: military_truck
+  3: sp_artillery
+  4: mlrs
+  5: helicopter
+  6: uav

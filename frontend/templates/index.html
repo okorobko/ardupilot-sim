@@ -66,10 +66,23 @@
         .camera-overlay.expanded img {
             width: 560px; height: 420px;
         }
+        .camera-overlay canvas.det-canvas {
+            position: absolute; top: 0; left: 0;
+            width: 280px; height: 210px;
+            pointer-events: none;
+        }
+        .camera-overlay.expanded canvas.det-canvas {
+            width: 560px; height: 420px;
+        }
         .camera-label {
             position: absolute; bottom: 4px; left: 6px;
             font-size: 0.6em; color: #5cb8ff; font-family: monospace;
             background: rgba(0,0,0,0.6); padding: 1px 5px; border-radius: 3px;
+        }
+        .det-stats {
+            position: absolute; bottom: 4px; right: 6px;
+            font-size: 0.55em; color: #5cdb5c; font-family: monospace;
+            background: rgba(0,0,0,0.7); padding: 1px 5px; border-radius: 3px;
         }
         .camera-no-signal {
             width: 280px; height: 210px; display: flex;
@@ -216,11 +229,13 @@
             <div>SPD: <span class="hud-val" id="hud-spd">0.0</span> m/s</div>
             <div>HDG: <span class="hud-val" id="hud-hdg">0</span>&deg;</div>
         </div>
-        <!-- Downward camera overlay (top-right) -->
+        <!-- Downward camera overlay (top-right) with detection canvas -->
         <div class="camera-overlay" id="camera-overlay" onclick="toggleCamera()" style="top:8px;right:8px;">
             <div class="camera-no-signal" id="camera-no-signal">DOWN: NO SIGNAL</div>
             <img id="camera-img" style="display:none;" alt="Down Camera">
+            <canvas id="det-canvas" class="det-canvas" width="640" height="480" style="display:none;"></canvas>
             <div class="camera-label">DOWN</div>
+            <div class="det-stats" id="det-stats" style="display:none;"></div>
         </div>
         <!-- Chase camera overlay (top-right, below down cam) -->
         <div class="camera-overlay" id="chase-overlay" onclick="toggleChase()" style="top:230px;right:8px;">
@@ -414,6 +429,65 @@ function toggleCamera() {
 }
 function toggleChase() {
     document.getElementById('chase-overlay').classList.toggle('expanded');
+}
+
+// ── Detection overlay ───────────────────────────
+const DET_COLORS = {
+    tank: '#ff0000', apc_ifv: '#ff8c00', military_truck: '#c8c800',
+    sp_artillery: '#ff5050', mlrs: '#ff0080', helicopter: '#00c8ff', uav: '#00c8c8'
+};
+let lastDetections = [], detLatency = 0, detCount = 0;
+
+socket.on('detection_results', (data) => {
+    lastDetections = data.detections || [];
+    detLatency = data.latency_ms || 0;
+    detCount++;
+    drawDetections();
+    if (detCount === 1) clog('SYS', 'Detection pipeline active', 'log-ok');
+});
+
+function drawDetections() {
+    const canvas = document.getElementById('det-canvas');
+    const img = document.getElementById('camera-img');
+    const stats = document.getElementById('det-stats');
+
+    if (!img.naturalWidth) return;
+
+    // Show canvas
+    canvas.style.display = 'block';
+    stats.style.display = 'block';
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Scale factor: detection coords are in original image space (640x480)
+    const sx = canvas.width / img.naturalWidth;
+    const sy = canvas.height / img.naturalHeight;
+
+    lastDetections.forEach(det => {
+        const [x1, y1, x2, y2] = det.bbox;
+        const color = DET_COLORS[det.class_name] || '#00ff00';
+        const bx = x1 * sx, by = y1 * sy;
+        const bw = (x2 - x1) * sx, bh = (y2 - y1) * sy;
+
+        // Bounding box
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bx, by, bw, bh);
+
+        // Label
+        const label = `${det.class_name} ${(det.confidence * 100).toFixed(0)}%`;
+        ctx.font = 'bold 11px monospace';
+        const tw = ctx.measureText(label).width;
+        ctx.fillStyle = color;
+        ctx.fillRect(bx, by - 14, tw + 6, 14);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(label, bx + 3, by - 3);
+    });
+
+    // Stats
+    stats.textContent = `${lastDetections.length} det | ${detLatency.toFixed(0)}ms`;
+    stats.style.color = lastDetections.length > 0 ? '#ff6b6b' : '#5cdb5c';
 }
 
 socket.on('log', (data) => {

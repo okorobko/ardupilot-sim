@@ -1,0 +1,259 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <world name="military_training">
+
+    <!-- Physics: 1ms step for ArduPilot -->
+    <physics name="1ms" type="ignore">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <!-- Required system plugins (Gazebo Garden / gz-sim7) -->
+    <plugin filename="gz-sim-physics-system"
+      name="gz::sim::systems::Physics">
+    </plugin>
+    <plugin filename="gz-sim-sensors-system"
+      name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-user-commands-system"
+      name="gz::sim::systems::UserCommands">
+    </plugin>
+    <plugin filename="gz-sim-scene-broadcaster-system"
+      name="gz::sim::systems::SceneBroadcaster">
+    </plugin>
+    <plugin filename="gz-sim-imu-system"
+      name="gz::sim::systems::Imu">
+    </plugin>
+    <plugin filename="gz-sim-navsat-system"
+      name="gz::sim::systems::NavSat">
+    </plugin>
+
+    <scene>
+      <ambient>1.0 1.0 1.0</ambient>
+      <background>0.6 0.8 1.0</background>
+      <sky></sky>
+    </scene>
+
+    <!-- GPS: Kyiv (matches drone.yaml) -->
+    <spherical_coordinates>
+      <latitude_deg>50.450001</latitude_deg>
+      <longitude_deg>30.523333</longitude_deg>
+      <elevation>180</elevation>
+      <heading_deg>0</heading_deg>
+      <surface_model>EARTH_WGS84</surface_model>
+    </spherical_coordinates>
+
+    <!-- Sun -->
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 100 0 0 0</pose>
+      <diffuse>0.9 0.9 0.9 1</diffuse>
+      <specular>0.5 0.5 0.5 1</specular>
+      <attenuation>
+        <range>1000</range><constant>0.9</constant>
+        <linear>0.01</linear><quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.5 0.3 -0.9</direction>
+    </light>
+
+    <!-- ══════════════════════════════════════════════════════
+         Ground: mixed terrain (grass + dirt patches)
+         ══════════════════════════════════════════════════════ -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>500 500</size></plane></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>500 500</size></plane></geometry>
+          <material>
+            <ambient>0.25 0.35 0.2 1</ambient>
+            <diffuse>0.25 0.35 0.2 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Dirt road (E-W) -->
+    <model name="dirt_road_ew">
+      <static>true</static>
+      <link name="link">
+        <visual name="v"><pose>0 0 0.005 0 0 0</pose>
+          <geometry><box><size>300 6 0.01</size></box></geometry>
+          <material><ambient>0.35 0.3 0.2 1</ambient><diffuse>0.4 0.35 0.25 1</diffuse></material>
+        </visual>
+        <collision name="c"><pose>0 0 0.005 0 0 0</pose>
+          <geometry><box><size>300 6 0.01</size></box></geometry>
+        </collision>
+      </link>
+    </model>
+
+    <!-- Dirt road (N-S) -->
+    <model name="dirt_road_ns">
+      <static>true</static>
+      <link name="link">
+        <visual name="v"><pose>0 0 0.005 0 0 0</pose>
+          <geometry><box><size>6 300 0.01</size></box></geometry>
+          <material><ambient>0.35 0.3 0.2 1</ambient><diffuse>0.4 0.35 0.25 1</diffuse></material>
+        </visual>
+        <collision name="c"><pose>0 0 0.005 0 0 0</pose>
+          <geometry><box><size>6 300 0.01</size></box></geometry>
+        </collision>
+      </link>
+    </model>
+
+    <!-- ══════════════════════════════════════════════════════
+         Military Vehicle Formations
+         Area 1: Tank column on E-W road (moving east)
+         ══════════════════════════════════════════════════════ -->
+
+    <!-- Tank 1 — lead -->
+    <include>
+      <uri>model://tank_t72</uri>
+      <name>tank_1</name>
+      <pose>-40 0 0 0 0 0</pose>
+    </include>
+
+    <!-- Tank 2 — following -->
+    <include>
+      <uri>model://tank_t72</uri>
+      <name>tank_2</name>
+      <pose>-55 1 0 0 0 0.05</pose>
+    </include>
+
+    <!-- Tank 3 — following -->
+    <include>
+      <uri>model://tank_t72</uri>
+      <name>tank_3</name>
+      <pose>-70 -1 0 0 0 -0.03</pose>
+    </include>
+
+    <!-- APC escort -->
+    <include>
+      <uri>model://apc_bmp2</uri>
+      <name>apc_1</name>
+      <pose>-30 4 0 0 0 0.1</pose>
+    </include>
+
+    <include>
+      <uri>model://apc_bmp2</uri>
+      <name>apc_2</name>
+      <pose>-85 -2 0 0 0 0</pose>
+    </include>
+
+    <!-- ══════════════════════════════════════════════════════
+         Area 2: Artillery position (off-road, northeast)
+         ══════════════════════════════════════════════════════ -->
+
+    <include>
+      <uri>model://sp_artillery</uri>
+      <name>sp_art_1</name>
+      <pose>50 40 0 0 0 0.8</pose>
+    </include>
+
+    <include>
+      <uri>model://sp_artillery</uri>
+      <name>sp_art_2</name>
+      <pose>60 50 0 0 0 0.75</pose>
+    </include>
+
+    <include>
+      <uri>model://sp_artillery</uri>
+      <name>sp_art_3</name>
+      <pose>70 42 0 0 0 0.85</pose>
+    </include>
+
+    <!-- ══════════════════════════════════════════════════════
+         Area 3: MLRS battery (northwest field)
+         ══════════════════════════════════════════════════════ -->
+
+    <include>
+      <uri>model://mlrs_grad</uri>
+      <name>mlrs_1</name>
+      <pose>-60 50 0 0 0 1.2</pose>
+    </include>
+
+    <include>
+      <uri>model://mlrs_grad</uri>
+      <name>mlrs_2</name>
+      <pose>-75 55 0 0 0 1.15</pose>
+    </include>
+
+    <!-- ══════════════════════════════════════════════════════
+         Area 4: Supply convoy on N-S road (heading south)
+         ══════════════════════════════════════════════════════ -->
+
+    <include>
+      <uri>model://military_truck</uri>
+      <name>truck_1</name>
+      <pose>0 -20 0 0 0 -1.57</pose>
+    </include>
+
+    <include>
+      <uri>model://military_truck</uri>
+      <name>truck_2</name>
+      <pose>1 -35 0 0 0 -1.57</pose>
+    </include>
+
+    <include>
+      <uri>model://military_truck</uri>
+      <name>truck_3</name>
+      <pose>-1 -50 0 0 0 -1.57</pose>
+    </include>
+
+    <include>
+      <uri>model://apc_bmp2</uri>
+      <name>apc_3</name>
+      <pose>0 -10 0 0 0 -1.57</pose>
+    </include>
+
+    <!-- ══════════════════════════════════════════════════════
+         Area 5: Helicopter LZ (southeast clearing)
+         ══════════════════════════════════════════════════════ -->
+
+    <include>
+      <uri>model://helicopter_mi24</uri>
+      <name>helo_1</name>
+      <pose>60 -40 0 0 0 0.4</pose>
+    </include>
+
+    <include>
+      <uri>model://helicopter_mi24</uri>
+      <name>helo_2</name>
+      <pose>80 -45 0 0 0 -0.3</pose>
+    </include>
+
+    <!-- ══════════════════════════════════════════════════════
+         Area 6: Mixed staging area (near origin)
+         ══════════════════════════════════════════════════════ -->
+
+    <include>
+      <uri>model://tank_t72</uri>
+      <name>tank_4</name>
+      <pose>20 15 0 0 0 2.5</pose>
+    </include>
+
+    <include>
+      <uri>model://apc_bmp2</uri>
+      <name>apc_4</name>
+      <pose>15 20 0 0 0 2.3</pose>
+    </include>
+
+    <include>
+      <uri>model://military_truck</uri>
+      <name>truck_4</name>
+      <pose>25 25 0 0 0 2.0</pose>
+    </include>
+
+    <!-- ══════════════════════════════════════════════════════
+         Drone: Iris with downward camera
+         ══════════════════════════════════════════════════════ -->
+    <include>
+      <uri>model://iris_with_camera</uri>
+      <pose>0 0 0.195 0 0 0</pose>
+    </include>
+
+  </world>
+</sdf>

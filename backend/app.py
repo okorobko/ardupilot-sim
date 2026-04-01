@@ -155,6 +155,12 @@ def handle_chase_frame(data):
     socketio.emit("chase_frame", data)
 
 
+@socketio.on("detection_results")
+def handle_detection_results(data):
+    """Forward ML detection results to browser clients."""
+    socketio.emit("detection_results", data)
+
+
 @socketio.on("demo_roundtrip")
 def handle_demo_roundtrip(data=None):
     global _demo_thread

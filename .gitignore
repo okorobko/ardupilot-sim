@@ -1,5 +1,29 @@
 venv/
+ml/venv_ml/
 __pycache__/
 *.pyc
 .DS_Store
 *.log
+
+# ML data (large, downloaded)
+ml/data/
+ml/test_results*/
+ml/aerial_training_status.txt
+
+# ML model training artifacts (keep only weights via LFS)
+ml/models/*/args.yaml
+ml/models/*/results.csv
+ml/models/*/results.png
+ml/models/*/*.jpg
+ml/models/*/*.png
+ml/models/*/events.*
+ml/models/*/weights/last.pt
+
+# Edge export formats (not in git)
+*.engine
+*.tflite
+*.hef
+
+# Pretrained base weights (downloaded by ultralytics)
+yolov8n.pt
+yolov8s.pt

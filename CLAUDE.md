@@ -61,21 +61,42 @@ ardupilot-sim/
 ├── backend/
 │   ├── app.py                    # Flask+SocketIO server, routes, command handler
 │   ├── mavlink_bridge.py         # MAVLink reader thread, telemetry, commands, demo_roundtrip
-│   ├── camera_bridge.py          # Gazebo camera → JPEG → SocketIO bridge (dual cam)
+│   ├── camera_bridge.py          # Gazebo camera → JPEG → SocketIO bridge (dual cam + detection)
+│   ├── detector.py               # YOLOv8n ONNX inference wrapper for vehicle detection
 │   ├── config_loader.py          # YAML config with defaults, vehicle type mapping
 │   └── requirements.txt          # flask, flask-socketio, pymavlink, pyyaml
 ├── config/
-│   └── drone.yaml                # Vehicle/simulation/visualization config
+│   └── drone.yaml                # Vehicle/simulation/visualization/detection config
 ├── frontend/
 │   └── templates/
-│       └── index.html            # Single-file dashboard (Three.js + Leaflet + controls)
+│       └── index.html            # Single-file dashboard (Three.js + Leaflet + controls + detection overlay)
 ├── gazebo/
 │   ├── models/
-│   │   └── iris_with_camera/
-│   │       ├── model.config      # Gazebo model metadata
-│   │       └── model.sdf         # Iris + downward cam (640x480) + chase cam (800x600)
+│   │   ├── iris_with_camera/     # Drone model with dual cameras
+│   │   ├── tank_t72/             # T-72 main battle tank (box model)
+│   │   ├── apc_bmp2/             # BMP-2 APC/IFV (box model)
+│   │   ├── military_truck/       # 6x6 military cargo truck (box model)
+│   │   ├── sp_artillery/         # Self-propelled artillery (box model)
+│   │   ├── mlrs_grad/            # BM-21 Grad MLRS (box model)
+│   │   └── helicopter_mi24/      # Mi-24 attack helicopter (box model)
 │   └── worlds/
-│       └── drone_surveillance.sdf # World: roads, 15 vehicles, GPS origin (Kyiv)
+│       ├── drone_surveillance.sdf # World: roads, 15 civilian vehicles
+│       └── military_training.sdf  # World: military vehicle formations for ML training
+├── ml/
+│   ├── configs/
+│   │   ├── dataset.yaml          # YOLO dataset config (7 military vehicle classes)
+│   │   └── train_config.yaml     # Training hyperparameters (two-phase)
+│   ├── data/                     # (gitignored) Downloaded + processed datasets
+│   ├── models/                   # (gitignored) Trained model weights
+│   ├── scripts/
+│   │   ├── download_datasets.py  # Download xView, DOTA, Roboflow
+│   │   ├── prepare_dataset.py    # Filter, remap labels, merge, split
+│   │   ├── generate_synthetic.py # Gazebo synthetic data pipeline
+│   │   ├── train.py              # Ultralytics two-phase training
+│   │   ├── export_all.py         # Export ONNX/TRT/TFLite
+│   │   ├── evaluate.py           # Per-class mAP evaluation
+│   │   └── benchmark_inference.py# Latency benchmarks per platform
+│   └── requirements.txt          # ultralytics, onnxruntime, albumentations, etc.
 ├── scripts/
 │   ├── install_ardupilot.sh      # ArduPilot SITL macOS installation
 │   ├── install_gazebo.sh         # Gazebo Garden + ardupilot_gazebo conda install
@@ -85,6 +106,8 @@ ardupilot-sim/
 │   ├── start_gazebo_sitl.sh      # SITL in Gazebo mode (--model JSON --frame gazebo-iris)
 │   ├── start_gazebo_all.sh       # Full Gazebo stack: server → unpause → SITL → backend → GUI
 │   ├── start_camera_bridge.sh    # Camera bridge launcher (requires gz_garden conda)
+│   ├── start_camera_detect.sh    # Camera bridge + ML detection launcher
+│   ├── start_military_world.sh   # Military training Gazebo world launcher
 │   ├── start_gz_bridge.sh        # ROS2 gz-bridge for camera topics (alternative)
 │   ├── test_all.py               # 51-test comprehensive suite
 │   ├── test_ui.py                # 44-test UI structure verification
@@ -403,6 +426,98 @@ gz service -s /world/drone_surveillance/control \
 - Drone must be armed and in GUIDED mode
 - Click on the dashboard page first (keyboard events need page focus)
 - Check the console for velocity commands being sent
+
+## ML Detection Pipeline
+
+### Overview
+
+Dual-model military vehicle detection from the drone's downward camera. Two YOLOv8 models selected by altitude:
+- **Aerial (>5m):** YOLOv8s — optimized for small overhead objects (mAP50=0.808, 40 FPS)
+- **Ground (<5m):** YOLOv8n — optimized for close-up identification (mAP50=0.652, 99 FPS)
+
+7 target classes: tank, apc_ifv, military_truck, sp_artillery, mlrs, helicopter, uav.
+
+### Trained Models
+
+| Model | Architecture | mAP50 | ONNX Size | FPS | Path |
+|-------|-------------|-------|-----------|-----|------|
+| Ground v1 | YOLOv8n | 0.652 | 11.7 MB | 99 | `ml/models/mil_vehicle_v1/weights/best.onnx` |
+| Aerial v2 | YOLOv8s | 0.808 | 42.7 MB | 40 | `ml/models/mil_vehicle_aerial_v2/weights/best.onnx` |
+
+### Architecture
+
+```
+camera_bridge.py --detect model.onnx
+  ├── capture_frame_raw() → BGR numpy array
+  ├── VehicleDetector.detect(frame) → detections list
+  │   ├── preprocess: letterbox resize to 640x640
+  │   ├── ONNX inference via onnxruntime
+  │   └── postprocess: NMS, scale boxes back to original coords
+  ├── emit camera_frame (base64 JPEG)
+  └── emit detection_results (JSON: bbox, class, confidence)
+
+app.py
+  └── relay detection_results → browser
+
+index.html
+  └── drawDetections() on canvas overlay
+```
+
+### Datasets (ml/data/raw/)
+
+8 datasets downloaded (~6K+ images total):
+- MV-RSD: 3,000 satellite images (Google Earth, 640x640)
+- Roboflow: Russian-military-annotated (993), Military Vehicle Recognition (1,320), Russian Tanks Drone (448), Military Vehicle Detection (624), Pure Tank (1,036), Aerial Tanks (618)
+- HuggingFace: Drone Detection (1,500 UAV images)
+
+### Training
+
+Two-phase transfer learning from COCO pretrained weights:
+1. Phase 1: Frozen backbone warmup (10-15 epochs, LR 0.001)
+2. Phase 2: Full fine-tune (50-80 epochs, SGD LR 0.01, cosine decay)
+
+**MPS training bug:** Dense annotations (>25 obj/image) + mosaic augmentation crash MPS. Workaround: cap labels to 25 obj/img, set mosaic=0.0, or use CPU.
+
+**ML Python env:** `ml/venv_ml/` (Python 3.11) — separate from main `venv/` (Python 3.14).
+
+### Running with Detection
+
+```bash
+# Start military training world
+conda activate gz_garden
+./scripts/start_military_world.sh
+
+# Start SITL
+./scripts/start_gazebo_sitl.sh
+
+# Start backend
+source venv/bin/activate
+cd backend && python3 app.py
+
+# Start camera bridge with detection (aerial model)
+conda activate gz_garden
+./scripts/start_camera_detect.sh ml/models/mil_vehicle_aerial_v2/weights/best.onnx
+```
+
+### Military Training World
+
+`military_training.sdf` contains realistic tactical formations:
+- Tank column (3x T-72 + 2x BMP-2) on E-W road
+- Artillery battery (3x SP artillery) in northeast field
+- MLRS section (2x Grad) in northwest field
+- Supply convoy (3x trucks + 1x APC) on N-S road
+- Helicopter LZ (2x Mi-24) in southeast clearing
+- Mixed staging area near origin
+
+### Gazebo Vehicle Models
+
+All military vehicles use procedural box geometry (like civilian vehicles) with olive drab colors:
+- `tank_t72`: hull + turret + gun barrel
+- `apc_bmp2`: hull + small turret
+- `military_truck`: cab + cargo bed
+- `sp_artillery`: hull + large turret + long barrel
+- `mlrs_grad`: truck base + launcher rack
+- `helicopter_mi24`: fuselage + cockpit + tail + rotor disk + skids
 
 ## Apple Silicon Compatibility
 
