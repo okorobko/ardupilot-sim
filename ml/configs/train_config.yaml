@@ -1,24 +1,27 @@
-# YOLOv8n Training Configuration
+# YOLOv8n-p2 Training Configuration — v3
 # Military Vehicle Detection from Aerial/Drone Imagery
+# Optimized for degraded real-world drone footage
 
-model:
-  name: yolov8n
-  pretrained: yolov8n.pt  # COCO pretrained weights
-  imgsz: 640
+# Model
+# YOLOv8n standard — P2 head causes native MPS crashes (libc++abi abort)
+# Small object sensitivity will be handled by SAHI at inference instead
+base_weights: yolov8n.pt
+imgsz: 640
+device: mps  # Apple Silicon GPU
 
 # Phase 1: Frozen backbone warmup
 warmup:
-  epochs: 10
+  epochs: 15
   lr0: 0.001
   freeze: 10  # freeze first 10 layers (backbone)
-  batch: 16
+  batch: 8  # reduced for MPS stability with P2 head
 
 # Phase 2: Full fine-tune
-training:
-  epochs: 150
+finetune:
+  epochs: 200
   lr0: 0.01
-  lrf: 0.01  # final LR = lr0 * lrf (cosine decay)
-  batch: 16
+  lrf: 0.01  # final LR = lr0 * lrf (cosine decay to 0.0001)
+  batch: 8  # reduced for MPS stability with P2 head
   optimizer: SGD
   momentum: 0.937
   weight_decay: 0.0005
@@ -26,21 +29,22 @@ training:
   warmup_momentum: 0.8
   warmup_bias_lr: 0.1
 
-# Augmentation (aerial-optimized)
-augmentation:
-  hsv_h: 0.015
-  hsv_s: 0.7
-  hsv_v: 0.4
-  degrees: 180.0  # full rotation — aerial views have no canonical orientation
-  translate: 0.1
-  scale: 0.5
-  shear: 0.0
-  perspective: 0.0
-  flipud: 0.5  # vertical flip — common for overhead
-  fliplr: 0.5
-  mosaic: 1.0
-  mixup: 0.1
-  copy_paste: 0.0
+# Augmentation (aerial-optimized, MPS-safe)
+degrees: 180.0  # full rotation — aerial views have no canonical orientation
+translate: 0.1
+scale: 0.5
+shear: 0.0
+perspective: 0.0
+flipud: 0.5   # vertical flip — common for overhead
+fliplr: 0.5
+mosaic: 0.0    # DISABLED — MPS crashes with dense annotations + mosaic
+mixup: 0.0     # disabled with mosaic off
+copy_paste: 0.0
+close_mosaic: 0  # N/A since mosaic is off
+label_smoothing: 0.1  # helps with noisy/synthetic labels
+
+# Workers — keep low on MPS to avoid memory pressure
+workers: 4
 
 # Export targets
 export:
@@ -48,32 +52,6 @@ export:
     opset: 12
     simplify: true
     dynamic: false
-  tensorrt:
-    half: true  # FP16
-    workspace: 4  # GB
   tflite:
     int8: true
     nms: true
-  hailo:
-    # Hailo Model Zoo has YOLOv8n recipes
-    # Export via hailo_sdk_client after ONNX
-    calibration_images: 300
-
-# Performance targets
-targets:
-  jetson_orin_nano:
-    precision: FP16
-    target_fps: 30
-    max_latency_ms: 33
-  rpi5_hailo8l:
-    precision: INT8
-    target_fps: 25
-    max_latency_ms: 40
-  nxp_imx8m:
-    precision: INT8
-    target_fps: 8
-    max_latency_ms: 120
-  apple_silicon:
-    precision: FP32
-    target_fps: 25
-    max_latency_ms: 40

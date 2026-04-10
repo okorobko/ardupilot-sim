@@ -215,6 +215,71 @@ class VehicleDetector:
         self._last_latency_ms = (time.perf_counter() - t0) * 1000
         return detections
 
+    def detect_sahi(self, frame, slice_size=320, overlap=0.3):
+        """Run sliced inference (SAHI) for improved small-object recall.
+
+        Tiles the frame into overlapping slices, runs detect() on each, then
+        merges all predictions back to original frame coordinates with NMS.
+
+        Args:
+            frame: BGR image (H, W, 3) uint8.
+            slice_size: Side length of each square tile in pixels.
+            overlap: Fractional overlap between adjacent tiles (0–1).
+
+        Returns:
+            Same format as detect().
+        """
+        t0 = time.perf_counter()
+        h, w = frame.shape[:2]
+        step = int(slice_size * (1 - overlap))
+
+        all_boxes, all_scores, all_class_ids = [], [], []
+
+        y = 0
+        while y < h:
+            x = 0
+            while x < w:
+                x2 = min(x + slice_size, w)
+                y2 = min(y + slice_size, h)
+                x1 = max(x2 - slice_size, 0)
+                y1 = max(y2 - slice_size, 0)
+
+                tile = frame[y1:y2, x1:x2]
+                for d in self.detect(tile):
+                    bx1, by1, bx2, by2 = d["bbox"]
+                    all_boxes.append([bx1 + x1, by1 + y1, bx2 + x1, by2 + y1])
+                    all_scores.append(d["confidence"])
+                    all_class_ids.append(d["class_id"])
+
+                if x2 == w:
+                    break
+                x += step
+            if y2 == h:
+                break
+            y += step
+
+        self._last_latency_ms = (time.perf_counter() - t0) * 1000
+
+        if not all_boxes:
+            return []
+
+        boxes = np.array(all_boxes, dtype=np.float32)
+        scores = np.array(all_scores, dtype=np.float32)
+        class_ids = np.array(all_class_ids, dtype=np.int32)
+
+        indices = self._nms(boxes, scores, self.iou_threshold)
+        detections = []
+        for i in indices:
+            x1, y1, x2, y2 = boxes[i]
+            detections.append({
+                "class_id": int(class_ids[i]),
+                "class_name": CLASS_NAMES[class_ids[i]],
+                "confidence": float(scores[i]),
+                "bbox": [round(float(x1), 1), round(float(y1), 1),
+                         round(float(x2), 1), round(float(y2), 1)],
+            })
+        return detections
+
     def draw_detections(self, frame, detections):
         """Draw bounding boxes and labels on frame.
 

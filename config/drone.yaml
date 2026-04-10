@@ -23,8 +23,8 @@ visualization:
 
 detection:
   enabled: false
-  model_path: ml/models/mil_vehicle_v1/weights/best.onnx
-  conf_threshold: 0.35
+  model_path: ml/models/mil_vehicle_aerial_v3_full/weights/best.onnx
+  conf_threshold: 0.30
   iou_threshold: 0.45
   classes:
     - tank

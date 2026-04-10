@@ -68,6 +68,14 @@ MAPPINGS = {
         2: 2,  # Vehicle → military_truck
         # skip: Person(0), Trench(1)
     },
+    "roboflow_pure_tank": {
+        # tank(0)
+        0: 0,  # tank → tank
+    },
+    "roboflow_aerial_tanks": {
+        # 0(0) — single class, aerial tank imagery
+        0: 0,  # tank → tank
+    },
 }
 
 
@@ -104,9 +112,79 @@ def load_roboflow_dataset(name, mapping):
     return samples
 
 
+def load_mvrsd_dataset():
+    """Load MV-RSD dataset (satellite military vehicles).
+
+    Classes: 0=SMV(Small MV), 1=LMV(Large MV), 2=AFV(Armored),
+             3=CV(Combat Vehicle), 4=MCV(Military Command Vehicle)
+    Mapping: AFV(2)→apc_ifv, CV(3)→tank, others→military_truck
+    """
+    base = RAW / "mvrsd"
+    samples = []
+    mapping = {
+        0: 2,  # SMV → military_truck
+        1: 2,  # LMV → military_truck
+        2: 1,  # AFV → apc_ifv
+        3: 0,  # CV (Combat Vehicle) → tank
+        4: 2,  # MCV → military_truck
+    }
+
+    for split in ["train", "val"]:
+        img_dir = base / "images" / split
+        lbl_dir = base / "labels" / split
+        if not img_dir.exists():
+            continue
+
+        for img_path in sorted(img_dir.iterdir()):
+            if img_path.suffix.lower() not in (".jpg", ".jpeg", ".png"):
+                continue
+            lbl_path = lbl_dir / (img_path.stem + ".txt")
+            boxes = []
+            if lbl_path.exists():
+                for line in lbl_path.read_text().strip().split("\n"):
+                    if not line.strip():
+                        continue
+                    parts = line.strip().split()
+                    src_cls = int(parts[0])
+                    if src_cls in mapping:
+                        target_cls = mapping[src_cls]
+                        boxes.append((target_cls, *[float(x) for x in parts[1:5]]))
+            if boxes:
+                samples.append((img_path, boxes))
+
+    return samples
+
+
 def load_drone_dataset():
     """Load HF drone detection dataset (already class 6)."""
     base = RAW / "hf_drone_detection"
+    samples = []
+
+    img_dir = base / "images"
+    lbl_dir = base / "labels"
+    if not img_dir.exists():
+        return samples
+
+    for img_path in sorted(img_dir.iterdir()):
+        if img_path.suffix.lower() not in (".jpg", ".jpeg", ".png"):
+            continue
+        lbl_path = lbl_dir / (img_path.stem + ".txt")
+        boxes = []
+        if lbl_path.exists():
+            for line in lbl_path.read_text().strip().split("\n"):
+                if not line.strip():
+                    continue
+                parts = line.strip().split()
+                boxes.append((int(parts[0]), *[float(x) for x in parts[1:5]]))
+        if boxes:
+            samples.append((img_path, boxes))
+
+    return samples
+
+
+def load_synthetic_dataset():
+    """Load synthetic data from Gazebo generation (already in 7-class format)."""
+    base = PROJECT / "ml" / "data" / "synthetic"
     samples = []
 
     img_dir = base / "images"
@@ -146,11 +224,24 @@ def main():
         all_samples.extend(samples)
         print(f"  {name}: {len(samples)} images")
 
+    # Load MV-RSD dataset
+    mvrsd_samples = load_mvrsd_dataset()
+    source_counts["mvrsd"] = len(mvrsd_samples)
+    all_samples.extend(mvrsd_samples)
+    print(f"  mvrsd: {len(mvrsd_samples)} images")
+
     # Load drone dataset
     drone_samples = load_drone_dataset()
     source_counts["hf_drone_detection"] = len(drone_samples)
     all_samples.extend(drone_samples)
     print(f"  hf_drone_detection: {len(drone_samples)} images")
+
+    # Load synthetic data (if generated)
+    synth_samples = load_synthetic_dataset()
+    if synth_samples:
+        source_counts["synthetic"] = len(synth_samples)
+        all_samples.extend(synth_samples)
+        print(f"  synthetic: {len(synth_samples)} images")
 
     print(f"\n  Total: {len(all_samples)} images")
 

@@ -1,0 +1,17 @@
+# Aerial Military Vehicle Detection Dataset — v3
+# 27K images with degraded augmentation + synthetic data for all 7 classes
+
+path: /Users/olkorobko/Documents/Projects/Drone/ardupilot-sim/ml/data/aerial
+train: train/images
+val: val/images
+test: test/images
+
+nc: 7
+names:
+  0: tank
+  1: apc_ifv
+  2: military_truck
+  3: sp_artillery
+  4: mlrs
+  5: helicopter
+  6: uav

@@ -46,8 +46,8 @@ def phase_warmup(
         lr0=lr0,
         freeze=freeze,
         imgsz=cfg.get("imgsz", 640),
-        batch=cfg.get("batch", 16),
-        workers=cfg.get("workers", 8),
+        batch=warmup_cfg.get("batch", cfg.get("batch", 16)),
+        workers=cfg.get("workers", 4),
         device=cfg.get("device", None),
         project=project,
         name=f"{name}_warmup",
@@ -55,8 +55,9 @@ def phase_warmup(
         # Aerial-optimised augmentations
         degrees=cfg.get("degrees", 180),
         flipud=cfg.get("flipud", 0.5),
-        mosaic=cfg.get("mosaic", 1.0),
-        mixup=cfg.get("mixup", 0.1),
+        mosaic=cfg.get("mosaic", 0.0),
+        mixup=cfg.get("mixup", 0.0),
+        label_smoothing=cfg.get("label_smoothing", 0.0),
         verbose=True,
     )
 
@@ -82,7 +83,7 @@ def phase_full(
     print("=" * 60)
 
     full_cfg = cfg.get("finetune", {})
-    epochs = full_cfg.get("epochs", 150)
+    epochs = full_cfg.get("epochs", 200)
     lr0 = full_cfg.get("lr0", 0.01)
     lrf = full_cfg.get("lrf", 0.01)  # cosine decay final LR ratio
 
@@ -92,17 +93,21 @@ def phase_full(
         lr0=lr0,
         lrf=lrf,
         imgsz=cfg.get("imgsz", 640),
-        batch=cfg.get("batch", 16),
-        workers=cfg.get("workers", 8),
+        batch=full_cfg.get("batch", cfg.get("batch", 16)),
+        workers=cfg.get("workers", 4),
         device=cfg.get("device", None),
         project=project,
         name=f"{name}_full",
         exist_ok=True,
+        optimizer=full_cfg.get("optimizer", "SGD"),
+        momentum=full_cfg.get("momentum", 0.937),
+        weight_decay=full_cfg.get("weight_decay", 0.0005),
         # Aerial-optimised augmentations
         degrees=cfg.get("degrees", 180),
         flipud=cfg.get("flipud", 0.5),
-        mosaic=cfg.get("mosaic", 1.0),
-        mixup=cfg.get("mixup", 0.1),
+        mosaic=cfg.get("mosaic", 0.0),
+        mixup=cfg.get("mixup", 0.0),
+        label_smoothing=cfg.get("label_smoothing", 0.0),
         cos_lr=True,
         verbose=True,
     )
@@ -179,8 +184,15 @@ def main() -> None:
         if args.resume and args.phase == "warmup":
             model = YOLO(str(args.resume))
         else:
+            # Load architecture config (e.g., yolov8n-p2.yaml) then transfer
+            # pretrained weights from base model
+            model_arch = cfg.get("model_arch", None)
             base_weights = cfg.get("base_weights", "yolov8n.pt")
-            model = YOLO(base_weights)
+            if model_arch:
+                model = YOLO(model_arch).load(base_weights)
+                print(f"  Architecture: {model_arch} + pretrained {base_weights}")
+            else:
+                model = YOLO(base_weights)
 
         warmup_best = phase_warmup(model, dataset_yaml, args.project, args.name, cfg)
     else:

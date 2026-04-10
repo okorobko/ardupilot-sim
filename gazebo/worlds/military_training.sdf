@@ -255,5 +255,40 @@
       <pose>0 0 0.195 0 0 0</pose>
     </include>
 
+    <!-- ══════════════════════════════════════════════════════
+         Synthetic camera for ML data generation
+         (movable via gz service set_pose)
+         ══════════════════════════════════════════════════════ -->
+    <model name="synthetic_camera">
+      <static>true</static>
+      <pose>0 0 50 0 1.5708 0</pose>
+      <link name="cam_link">
+        <inertial>
+          <mass>0.01</mass>
+          <inertia>
+            <ixx>0.00001</ixx><iyy>0.00001</iyy><izz>0.00001</izz>
+          </inertia>
+        </inertial>
+        <sensor name="synth_cam_sensor" type="camera">
+          <always_on>1</always_on>
+          <update_rate>10</update_rate>
+          <visualize>false</visualize>
+          <topic>synthetic_cam</topic>
+          <camera>
+            <horizontal_fov>1.047</horizontal_fov>
+            <image>
+              <width>640</width>
+              <height>480</height>
+              <format>RGB_INT8</format>
+            </image>
+            <clip>
+              <near>0.1</near>
+              <far>500</far>
+            </clip>
+          </camera>
+        </sensor>
+      </link>
+    </model>
+
   </world>
 </sdf>

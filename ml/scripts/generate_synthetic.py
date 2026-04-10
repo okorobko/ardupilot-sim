@@ -131,15 +131,21 @@ class CameraIntrinsics:
 # Vehicle class mapping
 # ---------------------------------------------------------------------------
 
-# YOLO class IDs for the military / vehicle detection task.
+# YOLO class IDs — must match ml/configs/dataset.yaml (7-class military).
 CLASS_MAP = {
-    "sedan": 0,
-    "suv": 1,
+    "tank": 0,
+    "apc": 1,
+    "apc_ifv": 1,
     "truck": 2,
-    "apc": 3,
-    "tank": 4,
+    "military_truck": 2,
+    "sp_artillery": 3,
+    "mlrs": 4,
     "helicopter": 5,
-    "car": 0,  # alias
+    "uav": 6,
+    # Civilian aliases (for drone_surveillance.sdf)
+    "sedan": 2,
+    "suv": 2,
+    "car": 2,
 }
 
 # Vehicle dimension presets (length, width, height).
@@ -148,8 +154,13 @@ VEHICLE_DIMENSIONS = {
     "car": (4.3, 1.7, 1.3),
     "suv": (4.8, 2.0, 1.7),
     "truck": (6.0, 2.2, 2.5),
+    "military_truck": (7.0, 2.5, 2.8),
     "apc": (6.5, 2.8, 2.3),
+    "apc_ifv": (6.5, 2.8, 2.3),
     "tank": (7.0, 3.6, 2.4),
+    "sp_artillery": (7.5, 3.2, 2.8),
+    "mlrs": (7.2, 2.5, 3.0),
+    "helicopter": (17.5, 3.5, 4.0),
 }
 
 
@@ -179,7 +190,7 @@ def parse_vehicles_from_sdf(sdf_path: Path) -> list[VehiclePose]:
     vehicle_prefixes = {
         "car_": "sedan",
         "suv_": "suv",
-        "truck_": "truck",
+        "truck_": "military_truck",
         "park_red": "sedan",
         "park_white": "car",
         "park_suv": "suv",
@@ -187,34 +198,84 @@ def parse_vehicles_from_sdf(sdf_path: Path) -> list[VehiclePose]:
         "apc_": "apc",
         "tank_": "tank",
         "heli_": "helicopter",
+        "helo_": "helicopter",
+        "sp_art": "sp_artillery",
+        "mlrs_": "mlrs",
+        "grad_": "mlrs",
     }
 
-    # Search all <model> elements at any depth
-    for model in root.iter("model"):
-        model_name = model.get("name", "")
-
-        # Determine vehicle class from name prefix
-        class_name = None
+    def _match_vehicle_class(name: str) -> str | None:
+        """Match a model/include name to a vehicle class via prefixes."""
         for prefix, cls in vehicle_prefixes.items():
-            if model_name.startswith(prefix) or model_name == prefix.rstrip("_"):
-                class_name = cls
-                break
+            if name.startswith(prefix) or name == prefix.rstrip("_"):
+                return cls
+        return None
 
-        if class_name is None:
-            continue
-
-        # Parse pose: "x y z roll pitch yaw"
-        pose_elem = model.find("pose")
+    def _parse_pose(pose_elem) -> tuple[float, float, float, float, float, float]:
+        """Parse a <pose> element into (x, y, z, roll, pitch, yaw)."""
         if pose_elem is not None and pose_elem.text:
             parts = pose_elem.text.strip().split()
             x, y, z = float(parts[0]), float(parts[1]), float(parts[2])
             roll = float(parts[3]) if len(parts) > 3 else 0.0
             pitch = float(parts[4]) if len(parts) > 4 else 0.0
             yaw = float(parts[5]) if len(parts) > 5 else 0.0
-        else:
-            x, y, z, roll, pitch, yaw = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+            return x, y, z, roll, pitch, yaw
+        return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 
-        # Try to get bounding box from collision geometry
+    # URI-to-class mapping for <include> elements
+    uri_class_map = {
+        "tank_t72": "tank",
+        "apc_bmp2": "apc",
+        "military_truck": "military_truck",
+        "sp_artillery": "sp_artillery",
+        "mlrs_grad": "mlrs",
+        "helicopter_mi24": "helicopter",
+    }
+
+    # Search <include> elements (used in military_training.sdf)
+    for include in root.iter("include"):
+        uri_elem = include.find("uri")
+        name_elem = include.find("name")
+        if uri_elem is None or name_elem is None:
+            continue
+
+        uri = uri_elem.text.strip() if uri_elem.text else ""
+        model_name = name_elem.text.strip() if name_elem.text else ""
+
+        # Try matching by <name> prefix first, then by URI
+        class_name = _match_vehicle_class(model_name)
+        if class_name is None:
+            # Match by URI (e.g., "model://sp_artillery")
+            uri_model = uri.replace("model://", "")
+            class_name = uri_class_map.get(uri_model)
+
+        if class_name is None:
+            continue
+
+        x, y, z, roll, pitch, yaw = _parse_pose(include.find("pose"))
+        length, width, height = VEHICLE_DIMENSIONS.get(
+            class_name, (4.5, 1.8, 1.4))
+
+        class_id = CLASS_MAP.get(class_name, 0)
+        vehicles.append(VehiclePose(
+            name=model_name,
+            class_name=class_name,
+            class_id=class_id,
+            x=x, y=y, z=z,
+            roll=roll, pitch=pitch, yaw=yaw,
+            length=length, width=width, height=height,
+        ))
+
+    # Search inline <model> elements at any depth
+    for model in root.iter("model"):
+        model_name = model.get("name", "")
+
+        class_name = _match_vehicle_class(model_name)
+        if class_name is None:
+            continue
+
+        x, y, z, roll, pitch, yaw = _parse_pose(model.find("pose"))
+
         length, width, height = VEHICLE_DIMENSIONS.get(
             class_name, (4.5, 1.8, 1.4)
         )

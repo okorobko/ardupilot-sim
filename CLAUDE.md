@@ -439,10 +439,19 @@ Dual-model military vehicle detection from the drone's downward camera. Two YOLO
 
 ### Trained Models
 
-| Model | Architecture | mAP50 | ONNX Size | FPS | Path |
-|-------|-------------|-------|-----------|-----|------|
-| Ground v1 | YOLOv8n | 0.652 | 11.7 MB | 99 | `ml/models/mil_vehicle_v1/weights/best.onnx` |
-| Aerial v2 | YOLOv8s | 0.808 | 42.7 MB | 40 | `ml/models/mil_vehicle_aerial_v2/weights/best.onnx` |
+| Model | Architecture | mAP50 (val) | mAP50 (test) | ONNX Size | FPS | Path |
+|-------|-------------|-------------|--------------|-----------|-----|------|
+| Ground v1 | YOLOv8n | 0.652 | — | 11.7 MB | 99 | `ml/models/mil_vehicle_v1/weights/best.onnx` |
+| Aerial v2 | YOLOv8s | 0.808 | — | 42.7 MB | 40 | `ml/models/mil_vehicle_aerial_v2/weights/best.onnx` |
+| Aerial v3 | YOLOv8n | 0.726 | **0.773** | 11.7 MB | 147 | `ml/models/mil_vehicle_aerial_v3_full/weights/best.onnx` |
+
+**Aerial v3 export artifacts** (all in `ml/models/mil_vehicle_aerial_v3_full/weights/`):
+- `best.pt` — PyTorch checkpoint (12 MB)
+- `best.onnx` — ONNX opset 20, CoreML-accelerated (11.7 MB) ← **used by drone backend**
+- `best_int8.tflite` — Dynamic-range INT8 TFLite (3.2 MB) ← **for edge deployment**
+- `best_saved_model/best_float16.tflite` — FP16 TFLite (5.9 MB)
+
+**Aerial v3 per-class test mAP50**: tank=0.834, military_truck=0.691, apc_ifv=0.623, sp_artillery=0.947, uav=0.912
 
 ### Architecture
 
