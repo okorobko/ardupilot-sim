@@ -54,20 +54,32 @@ class MAVLinkBridge:
             self._thread.join(timeout=3)
 
     def _run(self):
-        """Main loop: connect and read messages."""
-        print(f"  MAVLink bridge connecting to tcp:127.0.0.1:{self.port}...")
-        self.conn = mavutil.mavlink_connection(
-            f"tcp:127.0.0.1:{self.port}",
-            source_system=255,
-            source_component=0,
-        )
+        """Main loop: connect and read messages. Retries until SITL is ready."""
+        while self.running:
+            try:
+                print(f"  MAVLink bridge connecting to tcp:127.0.0.1:{self.port}...")
+                self.conn = mavutil.mavlink_connection(
+                    f"tcp:127.0.0.1:{self.port}",
+                    source_system=255,
+                    source_component=0,
+                )
 
-        # Wait for heartbeat
-        print("  Waiting for heartbeat...")
-        self.conn.wait_heartbeat(timeout=60)
-        self.connected = True
-        print(f"  Heartbeat received (system {self.conn.target_system}, "
-              f"component {self.conn.target_component})")
+                # Wait for heartbeat
+                print("  Waiting for heartbeat...")
+                hb = self.conn.wait_heartbeat(timeout=30)
+                if hb is None:
+                    print("  No heartbeat — retrying in 5s...")
+                    time.sleep(5)
+                    continue
+
+                self.connected = True
+                print(f"  Heartbeat received (system {self.conn.target_system}, "
+                      f"component {self.conn.target_component})")
+                break
+            except Exception as e:
+                print(f"  MAVLink connect error: {e} — retrying in 5s...")
+                self.connected = False
+                time.sleep(5)
 
         # Request message streams at desired rates
         self._request_streams()
