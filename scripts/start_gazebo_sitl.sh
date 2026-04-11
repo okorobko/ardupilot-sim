@@ -6,17 +6,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 CONFIG_FILE="${PROJECT_DIR}/config/drone.yaml"
 
-# Parse home location from config
-eval "$(python3 -c "
-import yaml, os
-with open('${CONFIG_FILE}') as f:
-    c = yaml.safe_load(f)
-s = c['simulation']
-adir = os.path.expanduser(s['ardupilot_dir'])
-loc = f\"{s['home_lat']},{s['home_lon']},{s['home_alt']},{s['home_heading']}\"
-print(f'ARDUPILOT_DIR=\"{adir}\"')
-print(f'HOME_LOC=\"{loc}\"')
-")"
+# Parse home location from config — use grep/sed to avoid yaml dep in gz_garden env
+_adir=$(grep 'ardupilot_dir' "${CONFIG_FILE}" | sed 's/.*: *//' | tr -d '"' | xargs)
+ARDUPILOT_DIR="${_adir/#\~/$HOME}"
+_lat=$(grep 'home_lat' "${CONFIG_FILE}" | sed 's/.*: *//')
+_lon=$(grep 'home_lon' "${CONFIG_FILE}" | sed 's/.*: *//')
+_alt=$(grep 'home_alt' "${CONFIG_FILE}" | sed 's/.*: *//')
+_hdg=$(grep 'home_heading' "${CONFIG_FILE}" | sed 's/.*: *//')
+HOME_LOC="${_lat},${_lon},${_alt},${_hdg}"
 
 SIM_VEHICLE="${ARDUPILOT_DIR}/Tools/autotest/sim_vehicle.py"
 

@@ -87,10 +87,19 @@ class MAVLinkBridge:
         last_emit = 0
         last_log = 0
         msg_counts = {}
+        consecutive_none = 0
         while self.running:
             msg = self.conn.recv_match(blocking=True, timeout=1)
             if msg is None:
+                consecutive_none += 1
+                if consecutive_none >= 10:
+                    # 10 seconds of silence — connection lost, re-enter retry loop
+                    print("  MAVLink connection lost — reconnecting...")
+                    self.connected = False
+                    self._run()
+                    return
                 continue
+            consecutive_none = 0
 
             msg_type = msg.get_type()
             msg_counts[msg_type] = msg_counts.get(msg_type, 0) + 1
@@ -216,6 +225,8 @@ class MAVLinkBridge:
 
     def arm(self):
         """Arm the vehicle. Waits for armed state instead of ACK."""
+        if not self.connected or self.conn is None:
+            return {"success": False, "message": "MAVLink not connected"}
         self.conn.mav.command_long_send(
             self.conn.target_system,
             self.conn.target_component,
@@ -231,6 +242,8 @@ class MAVLinkBridge:
 
     def disarm(self):
         """Disarm the vehicle. Waits for disarmed state."""
+        if not self.connected or self.conn is None:
+            return {"success": False, "message": "MAVLink not connected"}
         self.conn.mav.command_long_send(
             self.conn.target_system,
             self.conn.target_component,
@@ -245,6 +258,8 @@ class MAVLinkBridge:
 
     def takeoff(self, altitude=10):
         """Takeoff to specified altitude. Waits for positive climb."""
+        if not self.connected or self.conn is None:
+            return {"success": False, "message": "MAVLink not connected"}
         self.conn.mav.command_long_send(
             self.conn.target_system,
             self.conn.target_component,
@@ -260,6 +275,9 @@ class MAVLinkBridge:
 
     def set_mode(self, mode_name):
         """Set flight mode by name."""
+        if not self.connected or self.conn is None:
+            return {"success": False, "message": "MAVLink not connected"}
+
         # Reverse lookup mode number
         mode_num = None
         for num, name in self.COPTER_MODES.items():
@@ -283,6 +301,9 @@ class MAVLinkBridge:
         vx: forward (m/s), vy: right (m/s), vz: down (m/s), yaw_rate: rad/s
         Converts body→NED manually and holds yaw via position target.
         """
+        if not self.connected or self.conn is None:
+            return
+
         # Body to NED conversion using current heading
         hdg_rad = math.radians(self.heading)
         vn = vx * math.cos(hdg_rad) - vy * math.sin(hdg_rad)
@@ -313,6 +334,8 @@ class MAVLinkBridge:
 
     def goto_position(self, lat, lon, alt):
         """Send drone to a GPS position at given altitude (GUIDED mode)."""
+        if not self.connected or self.conn is None:
+            return
         self.conn.mav.set_position_target_global_int_send(
             0,  # time_boot_ms
             self.conn.target_system,
