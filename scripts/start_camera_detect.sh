@@ -5,7 +5,7 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-MODEL_PATH="${1:-${PROJECT_DIR}/ml/models/mil_vehicle_v1/weights/best.onnx}"
+MODEL_PATH="${1:-${PROJECT_DIR}/ml/models/mil_vehicle_aerial_v3_full/weights/best.onnx}"
 
 if [ ! -f "$MODEL_PATH" ]; then
     echo "WARNING: Model not found at $MODEL_PATH"
