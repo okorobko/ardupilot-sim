@@ -9,7 +9,7 @@ simulation:
   home_alt: 180
   home_heading: 0
   speed_up: 1
-  mavlink_port: 5760
+  mavlink_port: 5762
 
 visualization:
   ground_size: 500

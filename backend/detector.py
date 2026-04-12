@@ -152,8 +152,10 @@ class VehicleDetector:
         if len(predictions) == 0:
             return []
 
-        # Extract boxes (cx, cy, w, h) and convert to (x1, y1, x2, y2)
+        # Extract boxes (cx, cy, w, h) — model outputs normalized coords (0-1)
         cx, cy, w, h = predictions[:, 0], predictions[:, 1], predictions[:, 2], predictions[:, 3]
+        # Scale from normalized to input_size pixel space
+        cx, cy, w, h = cx * self.input_size, cy * self.input_size, w * self.input_size, h * self.input_size
         x1 = cx - w / 2
         y1 = cy - h / 2
         x2 = cx + w / 2
