@@ -49,6 +49,17 @@
             width: 100%; height: 100%;
             object-fit: cover; display: none; z-index: 1;
         }
+        #chase-det-canvas {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none; z-index: 2;
+        }
+        #chase-det-stats {
+            position: absolute; bottom: 8px; left: 8px;
+            font-size: 0.65em; color: #5cdb5c; font-family: monospace;
+            background: rgba(0,0,0,0.7); padding: 2px 8px; border-radius: 4px;
+            z-index: 10; display: none;
+        }
         #chase-no-signal {
             position: absolute; top: 0; left: 0;
             width: 100%; height: 100%;
@@ -88,7 +99,7 @@
             cursor: pointer; z-index: 10;
         }
         .camera-overlay img {
-            display: block; width: 320px; height: 240px;
+            display: block; width: 480px; height: 360px;
             object-fit: cover;
         }
         .camera-overlay.expanded img {
@@ -96,7 +107,7 @@
         }
         .camera-overlay canvas.det-canvas {
             position: absolute; top: 0; left: 0;
-            width: 320px; height: 240px;
+            width: 480px; height: 360px;
             pointer-events: none;
         }
         .camera-overlay.expanded canvas.det-canvas {
@@ -113,7 +124,7 @@
             background: rgba(0,0,0,0.7); padding: 1px 5px; border-radius: 3px;
         }
         .camera-no-signal {
-            width: 320px; height: 240px; display: flex;
+            width: 480px; height: 360px; display: flex;
             align-items: center; justify-content: center;
             color: #556677; font-size: 0.75em; font-family: monospace;
         }
@@ -253,6 +264,8 @@
     <div class="panel-3d">
         <div id="chase-no-signal">CHASE CAM — Start Gazebo + camera bridge</div>
         <img id="chase-img" alt="Chase Camera">
+        <canvas id="chase-det-canvas" width="800" height="600"></canvas>
+        <div id="chase-det-stats"></div>
         <canvas id="three-canvas"></canvas>
         <div id="pip-label">3D MAP</div>
         <div class="hud-overlay">
@@ -510,6 +523,54 @@ function drawDetections() {
     // Stats
     stats.textContent = `${lastDetections.length} det | ${detLatency.toFixed(0)}ms`;
     stats.style.color = lastDetections.length > 0 ? '#ff6b6b' : '#5cdb5c';
+}
+
+// ── Chase camera detection overlay ───────────────
+let lastChaseDetections = [], chaseDetLatency = 0, chaseDetCount = 0;
+
+socket.on('detection_results_chase', (data) => {
+    lastChaseDetections = data.detections || [];
+    chaseDetLatency = data.latency_ms || 0;
+    chaseDetCount++;
+    drawChaseDetections();
+    if (chaseDetCount === 1) clog('SYS', 'Chase cam detection active', 'log-ok');
+});
+
+function drawChaseDetections() {
+    const canvas = document.getElementById('chase-det-canvas');
+    const img = document.getElementById('chase-img');
+    const stats = document.getElementById('chase-det-stats');
+    if (!img.naturalWidth) return;
+
+    stats.style.display = 'block';
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Scale: detection coords in 800x600 image space → canvas (800x600)
+    const sx = canvas.width / img.naturalWidth;
+    const sy = canvas.height / img.naturalHeight;
+
+    lastChaseDetections.forEach(det => {
+        const [x1, y1, x2, y2] = det.bbox;
+        const color = DET_COLORS[det.class_name] || '#00ff00';
+        const bx = x1 * sx, by = y1 * sy;
+        const bw = (x2 - x1) * sx, bh = (y2 - y1) * sy;
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(bx, by, bw, bh);
+
+        const label = `${det.class_name} ${(det.confidence * 100).toFixed(0)}%`;
+        ctx.font = 'bold 14px monospace';
+        const tw = ctx.measureText(label).width;
+        ctx.fillStyle = color;
+        ctx.fillRect(bx, by - 18, tw + 8, 18);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(label, bx + 4, by - 4);
+    });
+
+    stats.textContent = `CHASE: ${lastChaseDetections.length} det | ${chaseDetLatency.toFixed(0)}ms`;
+    stats.style.color = lastChaseDetections.length > 0 ? '#ff6b6b' : '#5cdb5c';
 }
 
 socket.on('log', (data) => {

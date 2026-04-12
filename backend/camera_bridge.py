@@ -85,7 +85,8 @@ def capture_frame(topic, width=640, height=480):
     return frame_to_b64(img)
 
 
-def stream_camera(sio, topic, event_name, fps, label, run_detection=False):
+def stream_camera(sio, topic, event_name, fps, label, run_detection=False,
+                   detection_event="detection_results"):
     """Stream a camera topic to the backend.
 
     Args:
@@ -95,6 +96,7 @@ def stream_camera(sio, topic, event_name, fps, label, run_detection=False):
         fps: Target frames per second.
         label: Label for logging.
         run_detection: If True, run ML detection on frames and emit results.
+        detection_event: SocketIO event name for detection results.
     """
     interval = 1.0 / fps
     count = 0
@@ -119,7 +121,7 @@ def stream_camera(sio, topic, event_name, fps, label, run_detection=False):
 
                 # Emit detection results
                 if detections:
-                    sio.emit("detection_results", {
+                    sio.emit(detection_event, {
                         "detections": detections,
                         "latency_ms": round(latency, 1),
                         "frame_id": count,
@@ -186,10 +188,12 @@ def main():
     sio.connect(args.backend)
     print("Connected!", flush=True)
 
-    # Stream chase cam in a thread (overlay, lower fps)
+    # Stream chase cam in a thread (with detection on oblique view)
     t_chase = threading.Thread(
         target=stream_camera,
         args=(sio, "/chase_cam", "chase_frame", 3, "CHASE"),
+        kwargs={"run_detection": detect_enabled,
+                "detection_event": "detection_results_chase"},
         daemon=True,
     )
     t_chase.start()
