@@ -87,6 +87,13 @@ PIDS+=($!)
 echo "      PID $! — waiting 18s for GPS lock..."
 sleep 18
 
+# Keep SERIAL0 (5760) connected so SITL opens SERIAL1 (5762) and sends heartbeats.
+# SITL stops heartbeats on all ports if SERIAL0 disconnects.
+echo "      Connecting to SERIAL0 (5760) to enable SERIAL1..."
+python3 -c "import socket,time;s=socket.socket();s.connect(('127.0.0.1',5760));time.sleep(99999)" &
+PIDS+=($!)
+sleep 5
+
 # ── 4. Web backend ────────────────────────────────────────────────────────────
 echo "[4/5] Starting web backend (http://localhost:5001)..."
 if [ -d "$VENV" ]; then

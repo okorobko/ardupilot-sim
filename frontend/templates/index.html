@@ -172,6 +172,30 @@
             font-family: monospace;
         }
 
+        /* Detection info panel */
+        .det-panel {
+            background: #0a1018; border-radius: 4px; padding: 4px 6px;
+            margin-top: 3px; font-family: monospace; font-size: 0.6em;
+        }
+        .det-panel-row {
+            display: flex; align-items: center; gap: 5px;
+            padding: 1px 0; border-bottom: 1px solid #1a2332;
+        }
+        .det-panel-row:last-child { border-bottom: none; }
+        .det-dot {
+            width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+        }
+        .det-cls-name { flex: 1; color: #e0e6ed; }
+        .det-cls-conf { color: #5cb8ff; width: 32px; text-align: right; }
+        .det-cls-count { color: #ffc107; width: 28px; text-align: right; }
+        .det-summary {
+            font-size: 0.95em; color: #8a9bb0; padding: 2px 0;
+            display: flex; justify-content: space-between;
+        }
+        .det-summary-val { color: #5cdb5c; font-weight: 600; }
+        .det-active { animation: det-pulse 0.8s ease-in-out; }
+        @keyframes det-pulse { 0%{opacity:1} 50%{opacity:0.5} 100%{opacity:1} }
+
         /* ── Bottom strip: console | telemetry+attitude | map ── */
         .panel-bottom {
             grid-area: bottom; display: flex; flex-direction: row; overflow: hidden;
@@ -338,6 +362,16 @@
             <span id="k-right" style="padding:1px 4px; border:1px solid #2a3f55; border-radius:2px;">&rarr;</span> = Arrows work too
         </div>
         <div style="font-size:0.5em; color:#556677; margin-top:2px;">Speed: <span id="fly-speed">3</span> m/s | Must be in GUIDED mode &amp; armed</div>
+
+        <div class="section-title">Detections (Live)</div>
+        <div class="det-panel" id="det-panel">
+            <div class="det-summary">
+                <span>Total: <span class="det-summary-val" id="det-total">0</span></span>
+                <span><span class="det-summary-val" id="det-rate">0.0</span>/s</span>
+                <span><span class="det-summary-val" id="det-lat">0</span>ms</span>
+            </div>
+            <div id="det-class-list"></div>
+        </div>
     </div>
 
     <!-- Bottom strip -->
@@ -466,18 +500,24 @@ function toggleCamera() {
     document.getElementById('camera-overlay').classList.toggle('expanded');
 }
 
-// ── Detection overlay ───────────────────────────
+// ── Detection overlay + info panel ───────────────
 const DET_COLORS = {
     tank: '#ff0000', apc_ifv: '#ff8c00', military_truck: '#c8c800',
     sp_artillery: '#ff5050', mlrs: '#ff0080', helicopter: '#00c8ff', uav: '#00c8c8'
 };
 let lastDetections = [], detLatency = 0, detCount = 0;
 
+// Detection info panel state
+const detClassStats = {};  // class_name → {count, maxConf, lastSeen}
+let detTimestamps = [];    // timestamps for rolling rate
+let detTotalCount = 0;
+
 socket.on('detection_results', (data) => {
     lastDetections = data.detections || [];
     detLatency = data.latency_ms || 0;
     detCount++;
     drawDetections();
+    updateDetPanel(lastDetections, detLatency);
     if (detCount === 1) clog('SYS', 'Detection pipeline active', 'log-ok');
 });
 
@@ -533,6 +573,7 @@ socket.on('detection_results_chase', (data) => {
     chaseDetLatency = data.latency_ms || 0;
     chaseDetCount++;
     drawChaseDetections();
+    updateDetPanel(lastChaseDetections, chaseDetLatency);
     if (chaseDetCount === 1) clog('SYS', 'Chase cam detection active', 'log-ok');
 });
 
@@ -571,6 +612,54 @@ function drawChaseDetections() {
 
     stats.textContent = `CHASE: ${lastChaseDetections.length} det | ${chaseDetLatency.toFixed(0)}ms`;
     stats.style.color = lastChaseDetections.length > 0 ? '#ff6b6b' : '#5cdb5c';
+}
+
+// ── Detection info panel logic ────────────────────
+function updateDetPanel(detections, latency) {
+    const now = Date.now();
+
+    // Update per-class stats
+    detections.forEach(d => {
+        const cn = d.class_name;
+        if (!detClassStats[cn]) {
+            detClassStats[cn] = {count: 0, maxConf: 0, lastSeen: 0};
+        }
+        detClassStats[cn].count++;
+        detClassStats[cn].maxConf = Math.max(detClassStats[cn].maxConf, d.confidence);
+        detClassStats[cn].lastSeen = now;
+    });
+
+    // Rolling rate (detections per second, 5s window)
+    if (detections.length > 0) {
+        detTimestamps.push(now);
+        detTotalCount += detections.length;
+    }
+    const cutoff = now - 5000;
+    detTimestamps = detTimestamps.filter(t => t > cutoff);
+    const rate = detTimestamps.length > 0 ? (detTimestamps.length / 5.0) : 0;
+
+    // Update summary
+    document.getElementById('det-total').textContent = detTotalCount;
+    document.getElementById('det-rate').textContent = rate.toFixed(1);
+    document.getElementById('det-lat').textContent = Math.round(latency);
+
+    // Update class list — sorted by count descending
+    const listEl = document.getElementById('det-class-list');
+    const sorted = Object.entries(detClassStats).sort((a, b) => b[1].count - a[1].count);
+
+    let html = '';
+    sorted.forEach(([cn, st]) => {
+        const color = DET_COLORS[cn] || '#00ff00';
+        const fresh = (now - st.lastSeen) < 2000;
+        const opacity = fresh ? '1' : '0.4';
+        html += `<div class="det-panel-row" style="opacity:${opacity}">
+            <span class="det-dot" style="background:${color}"></span>
+            <span class="det-cls-name">${cn}</span>
+            <span class="det-cls-conf">${(st.maxConf*100).toFixed(0)}%</span>
+            <span class="det-cls-count">&times;${st.count}</span>
+        </div>`;
+    });
+    listEl.innerHTML = html;
 }
 
 socket.on('log', (data) => {

@@ -66,7 +66,7 @@ class MAVLinkBridge:
 
                 # Wait for heartbeat
                 print("  Waiting for heartbeat...")
-                hb = self.conn.wait_heartbeat(timeout=30)
+                hb = self.conn.wait_heartbeat(timeout=60)
                 if hb is None:
                     print("  No heartbeat — retrying in 5s...")
                     time.sleep(5)
