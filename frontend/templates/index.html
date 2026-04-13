@@ -338,6 +338,9 @@
             <span style="font-size:0.6em;color:#8a9bb0;">Alt:</span>
             <input class="alt-input" id="takeoff-alt" type="number" value="10" min="1" max="100" step="1">
             <span style="font-size:0.6em;color:#8a9bb0;">m</span>
+            <span style="font-size:0.6em;color:#8a9bb0;margin-left:8px;">Max:</span>
+            <input class="alt-input" id="max-alt" type="number" value="100" min="10" max="500" step="10">
+            <span style="font-size:0.6em;color:#8a9bb0;">m</span>
         </div>
 
         <div class="section-title">Demo</div>
@@ -675,7 +678,13 @@ socket.on('log', (data) => {
 
 // ── Commands ───────────────────────────────────────────────
 function sendCmd(action) { clog('CONTROL','>> '+action.toUpperCase()); socket.emit('command',{action}); }
-function doTakeoff() { const a=parseFloat(document.getElementById('takeoff-alt').value)||10; clog('CONTROL',`>> TAKEOFF ${a}m`); socket.emit('command',{action:'takeoff',altitude:a}); }
+function doTakeoff() {
+    let a = parseFloat(document.getElementById('takeoff-alt').value) || 10;
+    const maxAlt = parseFloat(document.getElementById('max-alt').value) || 100;
+    if (a > maxAlt) { a = maxAlt; clog('CONTROL', `Clamped takeoff to max alt ${maxAlt}m`, 'log-ctrl'); }
+    clog('CONTROL', `>> TAKEOFF ${a}m`);
+    socket.emit('command', {action: 'takeoff', altitude: a});
+}
 function setMode() { const m=document.getElementById('mode-select').value; clog('CONTROL',`>> SET_MODE ${m}`); socket.emit('command',{action:'set_mode',mode:m}); }
 function startDemo() {
     const btn=document.getElementById('btn-demo'); btn.disabled=true; btn.style.opacity='0.5'; btn.textContent='DEMO...';
@@ -973,11 +982,19 @@ function sendFlyCmd() {
             if (m.yaw_rate) yr += m.yaw_rate;
         }
     }
+    // Enforce max altitude — block ascend (vz<0 in NED = up) if at/above limit
+    const maxAlt = parseFloat(document.getElementById('max-alt').value) || 100;
+    const curAlt = latestTelem.position ? latestTelem.position.alt : 0;
+    if (vz < 0 && curAlt >= maxAlt) {
+        vz = 0; // block further ascent
+    }
+    const maxAlt = parseFloat(document.getElementById('max-alt').value) || 100;
     socket.emit('fly', {
         vx: vx * FLY_SPEED,
         vy: vy * FLY_SPEED,
         vz: vz * FLY_SPEED,
         yaw_rate: yr * YAW_RATE,
+        max_alt: maxAlt,
     });
 }
 

@@ -295,14 +295,19 @@ class MAVLinkBridge:
         )
         return {"success": True, "message": f"Mode set to {mode_name}"}
 
-    def send_velocity(self, vx, vy, vz, yaw_rate=0):
+    def send_velocity(self, vx, vy, vz, yaw_rate=0, max_alt=100):
         """Send velocity command in body frame, converted to NED.
 
         vx: forward (m/s), vy: right (m/s), vz: down (m/s), yaw_rate: rad/s
+        max_alt: altitude ceiling in meters — blocks ascent above this.
         Converts body→NED manually and holds yaw via position target.
         """
         if not self.connected or self.conn is None:
             return
+
+        # Enforce altitude ceiling: vd<0 = ascending in NED
+        if vz < 0 and self.position["alt"] >= max_alt:
+            vz = 0
 
         # Body to NED conversion using current heading
         hdg_rad = math.radians(self.heading)

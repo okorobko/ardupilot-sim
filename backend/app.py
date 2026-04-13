@@ -140,7 +140,8 @@ def handle_fly(data):
     vy = data.get("vy", 0)  # left/right
     vz = data.get("vz", 0)  # up/down (NED: negative = up)
     yr = data.get("yaw_rate", 0)
-    bridge.send_velocity(vx, vy, vz, yr)
+    max_alt = data.get("max_alt", 100)
+    bridge.send_velocity(vx, vy, vz, yr, max_alt=max_alt)
 
 
 @socketio.on("camera_frame")
