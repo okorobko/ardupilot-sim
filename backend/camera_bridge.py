@@ -86,7 +86,7 @@ def capture_frame(topic, width=640, height=480):
 
 
 def stream_camera(sio, topic, event_name, fps, label, run_detection=False,
-                   detection_event="detection_results"):
+                   detection_event="detection_results", tracker=None):
     """Stream a camera topic to the backend.
 
     Args:
@@ -112,20 +112,26 @@ def stream_camera(sio, topic, event_name, fps, label, run_detection=False,
             img_bgr = capture_frame_raw(topic)
             if img_bgr is not None:
                 # Run detection
-                detections = _detector.detect(img_bgr)
+                raw_detections = _detector.detect(img_bgr)
                 latency = _detector.latency_ms
+
+                # Apply tracker for temporal smoothing (if available)
+                if tracker is not None:
+                    detections = tracker.update(raw_detections)
+                else:
+                    detections = raw_detections
 
                 # Encode frame (without drawn boxes — frontend draws them)
                 b64 = frame_to_b64(img_bgr)
                 sio.emit(event_name, {"data": b64})
 
-                # Emit detection results
+                # Emit tracked detection results (always emit so frontend can clear)
+                sio.emit(detection_event, {
+                    "detections": detections,
+                    "latency_ms": round(latency, 1),
+                    "frame_id": count,
+                })
                 if detections:
-                    sio.emit(detection_event, {
-                        "detections": detections,
-                        "latency_ms": round(latency, 1),
-                        "frame_id": count,
-                    })
                     detect_count += 1
 
                 count += 1
@@ -158,14 +164,18 @@ def main():
                         help=f"Backend URL (default: {BACKEND_URL})")
     args = parser.parse_args()
 
-    # Initialize detector if model provided
+    # Initialize detector and trackers if model provided
+    down_tracker = None
+    chase_tracker = None
     if args.detect:
         try:
-            from detector import VehicleDetector
+            from detector import VehicleDetector, SimpleTracker
             _detector = VehicleDetector(
                 args.detect,
                 conf_threshold=args.conf,
             )
+            down_tracker = SimpleTracker(iou_threshold=0.3, min_hits=2, max_age=8)
+            chase_tracker = SimpleTracker(iou_threshold=0.3, min_hits=2, max_age=8)
             print(f"  Detector loaded: {args.detect}", flush=True)
             print(f"  Confidence threshold: {args.conf}", flush=True)
         except Exception as e:
@@ -188,20 +198,21 @@ def main():
     sio.connect(args.backend)
     print("Connected!", flush=True)
 
-    # Stream chase cam in a thread (with detection on oblique view)
+    # Stream chase cam in a thread (with detection + tracking)
     t_chase = threading.Thread(
         target=stream_camera,
         args=(sio, "/chase_cam", "chase_frame", 3, "CHASE"),
         kwargs={"run_detection": detect_enabled,
-                "detection_event": "detection_results_chase"},
+                "detection_event": "detection_results_chase",
+                "tracker": chase_tracker},
         daemon=True,
     )
     t_chase.start()
 
-    # Stream downward cam in main thread (main view, higher fps + detection)
+    # Stream downward cam in main thread (main view, higher fps + detection + tracking)
     try:
         stream_camera(sio, "/camera", "camera_frame", 5, "DOWN",
-                       run_detection=detect_enabled)
+                       run_detection=detect_enabled, tracker=down_tracker)
     except KeyboardInterrupt:
         print("\nStopping...", flush=True)
     finally:

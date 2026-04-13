@@ -550,8 +550,9 @@ function drawDetections() {
         ctx.lineWidth = 2;
         ctx.strokeRect(bx, by, bw, bh);
 
-        // Label
-        const label = `${det.class_name} ${(det.confidence * 100).toFixed(0)}%`;
+        // Label (show track_id if available)
+        const tid = det.track_id ? `#${det.track_id} ` : '';
+        const label = `${tid}${det.class_name} ${(det.confidence * 100).toFixed(0)}%`;
         ctx.font = 'bold 11px monospace';
         const tw = ctx.measureText(label).width;
         ctx.fillStyle = color;
@@ -561,7 +562,7 @@ function drawDetections() {
     });
 
     // Stats
-    stats.textContent = `${lastDetections.length} det | ${detLatency.toFixed(0)}ms`;
+    stats.textContent = `${lastDetections.length} trk | ${detLatency.toFixed(0)}ms`;
     stats.style.color = lastDetections.length > 0 ? '#ff6b6b' : '#5cdb5c';
 }
 
@@ -601,7 +602,8 @@ function drawChaseDetections() {
         ctx.lineWidth = 3;
         ctx.strokeRect(bx, by, bw, bh);
 
-        const label = `${det.class_name} ${(det.confidence * 100).toFixed(0)}%`;
+        const tid = det.track_id ? `#${det.track_id} ` : '';
+        const label = `${tid}${det.class_name} ${(det.confidence * 100).toFixed(0)}%`;
         ctx.font = 'bold 14px monospace';
         const tw = ctx.measureText(label).width;
         ctx.fillStyle = color;
@@ -610,7 +612,7 @@ function drawChaseDetections() {
         ctx.fillText(label, bx + 4, by - 4);
     });
 
-    stats.textContent = `CHASE: ${lastChaseDetections.length} det | ${chaseDetLatency.toFixed(0)}ms`;
+    stats.textContent = `CHASE: ${lastChaseDetections.length} trk | ${chaseDetLatency.toFixed(0)}ms`;
     stats.style.color = lastChaseDetections.length > 0 ? '#ff6b6b' : '#5cdb5c';
 }
 

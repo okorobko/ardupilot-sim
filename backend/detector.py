@@ -45,6 +45,127 @@ CLASS_COLORS = [
 ]
 
 
+class SimpleTracker:
+    """IoU-based frame-to-frame tracker for stable detection display.
+
+    Matches detections across frames by IoU overlap, assigns stable track IDs,
+    and filters out one-frame noise. Tracks persist briefly through occlusions.
+    """
+
+    def __init__(self, iou_threshold=0.3, min_hits=2, max_age=8):
+        """
+        Args:
+            iou_threshold: Minimum IoU to match a detection to an existing track.
+            min_hits: Consecutive hits required before a track is displayed.
+            max_age: Frames without a match before a track is removed.
+        """
+        self.iou_threshold = iou_threshold
+        self.min_hits = min_hits
+        self.max_age = max_age
+        self._next_id = 1
+        self.tracks = []  # list of track dicts
+
+    def update(self, detections):
+        """Match detections to tracks and return stable tracked detections.
+
+        Args:
+            detections: List of detection dicts from VehicleDetector.detect().
+
+        Returns:
+            List of tracked detection dicts (same format + 'track_id' key).
+            Only tracks with hit_count >= min_hits are returned.
+        """
+        # Age all existing tracks
+        for t in self.tracks:
+            t["age"] += 1
+
+        if not detections:
+            # Remove expired tracks
+            self.tracks = [t for t in self.tracks if t["age"] <= self.max_age]
+            return [t for t in self.tracks if t["hit_count"] >= self.min_hits]
+
+        # Build cost matrix: IoU between each detection and each track
+        det_boxes = np.array([d["bbox"] for d in detections], dtype=np.float32)
+        matched_det = set()
+        matched_trk = set()
+
+        if self.tracks:
+            trk_boxes = np.array([t["bbox"] for t in self.tracks], dtype=np.float32)
+            iou_matrix = self._iou_matrix(det_boxes, trk_boxes)
+
+            # Greedy matching: highest IoU first
+            while True:
+                if iou_matrix.size == 0:
+                    break
+                max_iou = iou_matrix.max()
+                if max_iou < self.iou_threshold:
+                    break
+                di, ti = np.unravel_index(iou_matrix.argmax(), iou_matrix.shape)
+                if di in matched_det or ti in matched_trk:
+                    iou_matrix[di, ti] = 0
+                    continue
+
+                # Match found: update track
+                self.tracks[ti]["bbox"] = detections[di]["bbox"]
+                self.tracks[ti]["confidence"] = detections[di]["confidence"]
+                self.tracks[ti]["class_id"] = detections[di]["class_id"]
+                self.tracks[ti]["class_name"] = detections[di]["class_name"]
+                self.tracks[ti]["age"] = 0
+                self.tracks[ti]["hit_count"] += 1
+                matched_det.add(di)
+                matched_trk.add(ti)
+                iou_matrix[di, :] = 0
+                iou_matrix[:, ti] = 0
+
+        # Create new tracks for unmatched detections
+        for di, det in enumerate(detections):
+            if di not in matched_det:
+                self.tracks.append({
+                    "track_id": self._next_id,
+                    "bbox": det["bbox"],
+                    "confidence": det["confidence"],
+                    "class_id": det["class_id"],
+                    "class_name": det["class_name"],
+                    "age": 0,
+                    "hit_count": 1,
+                })
+                self._next_id += 1
+
+        # Remove expired tracks
+        self.tracks = [t for t in self.tracks if t["age"] <= self.max_age]
+
+        # Return confirmed tracks
+        result = []
+        for t in self.tracks:
+            if t["hit_count"] >= self.min_hits:
+                result.append({
+                    "track_id": t["track_id"],
+                    "class_id": t["class_id"],
+                    "class_name": t["class_name"],
+                    "confidence": t["confidence"],
+                    "bbox": t["bbox"],
+                })
+        return result
+
+    @staticmethod
+    def _iou_matrix(boxes_a, boxes_b):
+        """Compute IoU between two sets of boxes. Returns (len_a, len_b) matrix."""
+        x1a, y1a, x2a, y2a = boxes_a[:, 0], boxes_a[:, 1], boxes_a[:, 2], boxes_a[:, 3]
+        x1b, y1b, x2b, y2b = boxes_b[:, 0], boxes_b[:, 1], boxes_b[:, 2], boxes_b[:, 3]
+        areas_a = (x2a - x1a) * (y2a - y1a)
+        areas_b = (x2b - x1b) * (y2b - y1b)
+
+        iou = np.zeros((len(boxes_a), len(boxes_b)), dtype=np.float32)
+        for i in range(len(boxes_a)):
+            xx1 = np.maximum(x1a[i], x1b)
+            yy1 = np.maximum(y1a[i], y1b)
+            xx2 = np.minimum(x2a[i], x2b)
+            yy2 = np.minimum(y2a[i], y2b)
+            inter = np.maximum(0, xx2 - xx1) * np.maximum(0, yy2 - yy1)
+            iou[i] = inter / (areas_a[i] + areas_b - inter + 1e-6)
+        return iou
+
+
 class VehicleDetector:
     """YOLOv8n ONNX inference wrapper for military vehicle detection."""
 
