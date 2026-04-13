@@ -187,6 +187,27 @@ def handle_demo_roundtrip(data=None):
     _demo_thread.start()
 
 
+@socketio.on("demo_survey")
+def handle_demo_survey(data=None):
+    """Fly a survey pattern over all military vehicle formations."""
+    global _demo_thread
+    if _demo_thread and _demo_thread.is_alive():
+        emit("command_result", {"success": False, "message": "Demo already in progress"})
+        return
+
+    emit("command_result", {"success": True, "message": "Survey started!"})
+
+    def _run():
+        def status(msg):
+            socketio.emit("demo_status", {"message": msg})
+
+        result = bridge.demo_survey(status_callback=status)
+        socketio.emit("demo_status", {"message": result["message"], "done": True})
+
+    _demo_thread = threading.Thread(target=_run, daemon=True)
+    _demo_thread.start()
+
+
 # ── Main ─────────────────────────────────────────────────────
 
 if __name__ == "__main__":

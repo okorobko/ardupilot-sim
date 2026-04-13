@@ -342,7 +342,8 @@
 
         <div class="section-title">Demo</div>
         <div class="controls-row">
-            <button class="btn btn-demo" id="btn-demo" onclick="startDemo()" style="flex:1;">ROUNDTRIP 100m</button>
+            <button class="btn btn-demo" id="btn-demo" onclick="startDemo()" style="flex:1;">ROUNDTRIP</button>
+            <button class="btn" id="btn-survey" onclick="startSurvey()" style="flex:1;border-color:#5cdb5c;color:#5cdb5c;">SURVEY</button>
         </div>
         <div class="demo-status" id="demo-status">Ready</div>
 
@@ -468,7 +469,9 @@ socket.on('demo_status', (data) => {
     clog('DEMO', data.message);
     if (data.done) {
         const btn = document.getElementById('btn-demo');
-        btn.disabled = false; btn.style.opacity = '1'; btn.textContent = 'ROUNDTRIP 100m';
+        btn.disabled = false; btn.style.opacity = '1'; btn.textContent = 'ROUNDTRIP';
+        const btn2 = document.getElementById('btn-survey');
+        btn2.disabled = false; btn2.style.opacity = '1'; btn2.textContent = 'SURVEY';
     }
 });
 
@@ -679,6 +682,11 @@ function startDemo() {
     document.getElementById('demo-status').style.color='#a55eea';
     clog('CONTROL','>> ROUNDTRIP DEMO'); socket.emit('demo_roundtrip');
 }
+function startSurvey() {
+    const btn=document.getElementById('btn-survey'); btn.disabled=true; btn.style.opacity='0.5'; btn.textContent='SURVEY...';
+    document.getElementById('demo-status').style.color='#5cdb5c';
+    clog('CONTROL','>> SURVEY ALL FORMATIONS'); socket.emit('demo_survey');
+}
 
 // ── Telemetry UI ───────────────────────────────────────────
 function updateTelemetryUI(d) {
@@ -866,7 +874,46 @@ function initMap() {
     function fixMap() { map.invalidateSize(); map.setView([lat,lon],17); }
     [100,300,600,1000,2000,4000].forEach(ms=>setTimeout(fixMap,ms));
 
+    // Plot military vehicle positions from military_training.sdf
+    plotMilitaryVehicles(lat, lon);
+
     clog('SYS', `Map ready at (${lat.toFixed(4)}, ${lon.toFixed(4)})`, 'log-ok');
+}
+
+// Military vehicle positions: [name, model, x_east_m, y_north_m, color]
+const MILITARY_VEHICLES = [
+    ['tank_1','tank',     -40,  0, '#ff0000'],
+    ['tank_2','tank',     -55,  1, '#ff0000'],
+    ['tank_3','tank',     -70, -1, '#ff0000'],
+    ['tank_4','tank',      20, 15, '#ff0000'],
+    ['apc_1', 'apc_ifv',  -30,  4, '#ff8c00'],
+    ['apc_2', 'apc_ifv',  -85, -2, '#ff8c00'],
+    ['apc_3', 'apc_ifv',    0,-10, '#ff8c00'],
+    ['apc_4', 'apc_ifv',   15, 20, '#ff8c00'],
+    ['sp_1',  'sp_arty',   50, 40, '#ff5050'],
+    ['sp_2',  'sp_arty',   60, 50, '#ff5050'],
+    ['sp_3',  'sp_arty',   70, 42, '#ff5050'],
+    ['mlrs_1','mlrs',     -60, 50, '#ff0080'],
+    ['mlrs_2','mlrs',     -75, 55, '#ff0080'],
+    ['truck_1','truck',     0,-20, '#c8c800'],
+    ['truck_2','truck',     1,-35, '#c8c800'],
+    ['truck_3','truck',    -1,-50, '#c8c800'],
+    ['truck_4','truck',    25, 25, '#c8c800'],
+    ['helo_1','heli',      60,-40, '#00c8ff'],
+    ['helo_2','heli',      80,-45, '#00c8ff'],
+];
+
+function plotMilitaryVehicles(homeLat, homeLon) {
+    const mPerDegLat = 110540;
+    const mPerDegLon = 111320 * Math.cos(homeLat * Math.PI / 180);
+
+    MILITARY_VEHICLES.forEach(([name, cls, x, y, color]) => {
+        const lat = homeLat + y / mPerDegLat;
+        const lon = homeLon + x / mPerDegLon;
+        L.circleMarker([lat, lon], {
+            radius: 4, color: color, fillColor: color, fillOpacity: 0.7, weight: 1
+        }).addTo(map).bindTooltip(name, {direction: 'top', offset: [0, -5]});
+    });
 }
 
 function makeDroneIcon(hdg) {

@@ -507,3 +507,83 @@ class MAVLinkBridge:
                 pass
             return {"success": False, "message": str(e)}
 
+    def demo_survey(self, status_callback=None):
+        """Survey all military vehicle formations and return home.
+
+        Flies over 5 formations at 45m altitude:
+          1. Tank column (E-W road, x=-40 to -85)
+          2. Artillery battery (NE, x=50-70 y=40-50)
+          3. MLRS section (NW, x=-60 to -75 y=50-55)
+          4. Supply convoy (N-S road, x=0 y=-10 to -50)
+          5. Helicopter LZ (SE, x=60-80 y=-40 to -45)
+        """
+        def log(msg):
+            print(f"  [Survey] {msg}")
+            if status_callback:
+                status_callback(msg)
+
+        home_lat = self.position["lat"]
+        home_lon = self.position["lon"]
+        cos_lat = math.cos(math.radians(home_lat))
+        cruise_alt = 45
+
+        def to_gps(x_east, y_north):
+            lat = home_lat + y_north / 110540.0
+            lon = home_lon + x_east / (111320.0 * cos_lat)
+            return lat, lon
+
+        # Survey waypoints: center of each formation
+        waypoints = [
+            ("Tank column",      *to_gps(-55, 0)),
+            ("Artillery battery", *to_gps(60, 45)),
+            ("MLRS section",     *to_gps(-67, 52)),
+            ("Supply convoy",    *to_gps(0, -30)),
+            ("Helicopter LZ",   *to_gps(70, -42)),
+            ("Staging area",    *to_gps(20, 20)),
+        ]
+
+        try:
+            log("Setting GUIDED mode...")
+            self.set_mode("GUIDED")
+            time.sleep(1)
+
+            if not self.armed:
+                log("Arming...")
+                result = self.arm()
+                if not result["success"]:
+                    log(f"Arm failed: {result['message']}")
+                    return {"success": False, "message": result["message"]}
+                time.sleep(1)
+
+            log(f"Taking off to {cruise_alt}m...")
+            self.takeoff(cruise_alt)
+            self.wait_altitude(cruise_alt, tolerance=5, timeout=60,
+                               callback=lambda alt: log(f"Climbing... {alt:.1f}m"))
+
+            for i, (name, wp_lat, wp_lon) in enumerate(waypoints):
+                log(f"WP{i+1}/{len(waypoints)}: Flying to {name}...")
+                self.goto_position(wp_lat, wp_lon, cruise_alt)
+                self.wait_position(wp_lat, wp_lon, tolerance=5, timeout=90,
+                                   callback=lambda d, a: log(f"En route... {d:.0f}m"))
+                log(f"Over {name} — hovering 5s for detection...")
+                time.sleep(5)
+
+            log("Survey complete! Returning to home...")
+            self.goto_position(home_lat, home_lon, cruise_alt)
+            self.wait_position(home_lat, home_lon, tolerance=5, timeout=120,
+                               callback=lambda d, a: log(f"RTH... {d:.0f}m"))
+
+            log("Landing...")
+            self.set_mode("LAND")
+            self.wait_disarmed(timeout=120)
+            log("Survey complete! Landed at home.")
+            return {"success": True, "message": "Survey complete!"}
+
+        except Exception as e:
+            log(f"Error: {e}")
+            try:
+                self.set_mode("LAND")
+            except Exception:
+                pass
+            return {"success": False, "message": str(e)}
+
